@@ -101,9 +101,9 @@ type Engine struct {
 	// canChown: the process can restore ownership and modes of files it
 	// does not own (CAP_CHOWN + CAP_FOWNER, i.e. root in practice).
 	canChown bool
-	// Recovery mode (the standalone restore tool): see every host, never write.
-	anyHost, readOnly bool
-	uid               int
+	// Recovery mode (the standalone restore tool): never write.
+	readOnly bool
+	uid      int
 }
 
 func New(dir, hostname string) (*Engine, error) {
@@ -478,13 +478,13 @@ func (e *Engine) restoreTo(ctx context.Context, rep repo.Repository, entry kfs.E
 	return rs, nil
 }
 
+// snapshotEntry opens a snapshot for reading. It does not check which host
+// wrote it: reading is harmless, and a restore on another host (the original
+// being gone) has to work.
 func (e *Engine) snapshotEntry(ctx context.Context, rep repo.Repository, snapshotID, rel string) (kfs.Entry, error) {
 	man, err := snapshot.LoadSnapshot(ctx, rep, manifest.ID(snapshotID))
 	if err != nil {
 		return nil, fmt.Errorf("load snapshot %s: %w", snapshotID, err)
-	}
-	if !e.anyHost && man.Source.Host != e.hostname {
-		return nil, fmt.Errorf("snapshot %s belongs to host %s", snapshotID, man.Source.Host)
 	}
 	entry, err := snapshotfs.SnapshotRoot(rep, man)
 	if err != nil {

@@ -79,19 +79,20 @@ func (c *Controller) Stacks(ctx context.Context, agentID string) ([]*agentpb.Sta
 }
 
 // RestoreStack restores a stack job's snapshot, in place (targetRoot "")
-// or into an empty directory, and records it as a run.
-func (c *Controller) RestoreStack(ctx context.Context, jobID, snapshotID, targetRoot string, stopStack bool) (catalog.Run, error) {
+// or into an empty directory, and records it as a run. onID runs it on
+// another agent, which needs a targetRoot.
+func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, targetRoot string, stopStack bool) (catalog.Run, error) {
 	if targetRoot != "" {
 		if _, err := guard.RestoreTarget(targetRoot); err != nil {
 			return catalog.Run{}, err
 		}
 	}
-	return c.stackOp(ctx, jobID, "restore", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.stackOp(ctx, jobID, onID, targetRoot == "", "restore", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		where := "original locations"
 		if targetRoot != "" {
 			where = targetRoot
 		}
-		run.Summary = fmt.Sprintf("restore stack %s from %s to %s", job.Stack.Project, shortID(snapshotID), where)
+		run.Summary = fmt.Sprintf("restore stack %s from %s to %s%s", job.Stack.Project, shortID(snapshotID), where, onHost(job, agent))
 		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 			return cl.RestoreStack(ctx, &agentpb.RestoreStackRequest{Repository: toProtoRepo(repo),
 				SnapshotId: snapshotID, TargetRoot: targetRoot, StopStack: stopStack})
@@ -109,7 +110,7 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, snapshotID, target
 // ImportDump loads a service's database dump from a stack snapshot into the
 // running container, recorded as a run.
 func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service string) (catalog.Run, error) {
-	return c.stackOp(ctx, jobID, "import", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.stackOp(ctx, jobID, "", false, "import", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		run.Summary = fmt.Sprintf("import %s dump from %s", service, shortID(snapshotID))
 		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ImportDumpResponse, error) {
 			return cl.ImportDump(ctx, &agentpb.ImportDumpRequest{Repository: toProtoRepo(repo), SnapshotId: snapshotID, Service: service})
@@ -124,12 +125,13 @@ func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service 
 	})
 }
 
-func (c *Controller) stackOp(ctx context.Context, jobID, kind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
-	return c.jobOp(ctx, jobID, kind, catalog.JobStack, op)
+func (c *Controller) stackOp(ctx context.Context, jobID, onID string, inPlace bool, kind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
+	return c.jobOp(ctx, jobID, onID, inPlace, kind, catalog.JobStack, op)
 }
 
 // jobOp runs a manual operation on a job of jobKind and records it as a run.
-func (c *Controller) jobOp(ctx context.Context, jobID, kind, jobKind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
+// It runs on the job's agent, or on onID. inPlace says op changes the original locations, which only the job's own agent may do.
+func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool, kind, jobKind string, op func(catalog.Repository, catalog.Agent, catalog.Job, *catalog.Run) error) (catalog.Run, error) {
 	if !c.inflight.start(jobID) {
 		return catalog.Run{}, ErrRunning
 	}
@@ -140,6 +142,12 @@ func (c *Controller) jobOp(ctx context.Context, jobID, kind, jobKind string, op 
 	}
 	if job.Kind != jobKind {
 		return catalog.Run{}, errors.New("not a " + jobKind + " job")
+	}
+	if agent, err = c.hostFor(ctx, agent, onID); err != nil {
+		return catalog.Run{}, err
+	}
+	if inPlace && agent.ID != job.AgentID {
+		return catalog.Run{}, ErrNeedsTarget
 	}
 	run := catalog.Run{JobID: jobID, Kind: kind, Trigger: "manual", StartedAt: time.Now()}
 	if run.ID, err = c.Catalog.StartRun(ctx, jobID, kind, run.Trigger, run.StartedAt); err != nil {

@@ -117,6 +117,19 @@ func TestECCRepairsBitrot(t *testing.T) {
 	}
 }
 
+func TestRestoreSnapshotOfAnotherHost(t *testing.T) {
+	ctx := context.Background()
+	_, r, _, snap := checkFixture(t, false)
+	other := newEngine(t, "host-b") // a normal engine, not recovery mode
+	out := filepath.Join(t.TempDir(), "out")
+	if _, err := other.Restore(ctx, r, snap, "", out, false); err != nil {
+		t.Fatalf("restore of host-a's snapshot on host-b: %v", err)
+	}
+	if readFile(t, filepath.Join(out, "small.txt")) != "hello" {
+		t.Fatal("restored the wrong data")
+	}
+}
+
 func TestRecoveryModeSeesAllHosts(t *testing.T) {
 	ctx := context.Background()
 	e, r, _, snap := checkFixture(t, false)

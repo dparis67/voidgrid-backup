@@ -180,8 +180,8 @@ func shortManifest(m *snapshot.Manifest) string {
 }
 
 // Recovery configures the engine for the standalone restore tool: the
-// repository is opened read-only and snapshots of every host are visible.
-func (e *Engine) Recovery() { e.anyHost, e.readOnly = true, true }
+// repository is opened read-only.
+func (e *Engine) Recovery() { e.readOnly = true }
 
 // HostSnapshot is a snapshot with the host it came from.
 type HostSnapshot struct {

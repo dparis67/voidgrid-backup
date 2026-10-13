@@ -1,9 +1,21 @@
 {{define "browse"}}{{template "top" .}}
   {{$base := printf "/jobs/%s/snapshots/%s" .Job.ID .SnapshotID}}
+  {{$on := .On}}
   <h2><a href="/jobs/{{.Job.ID}}">{{.Job.Name}}</a> · snapshot <span class="mono">{{short .SnapshotID}}</span></h2>
   <p class="mono">
-    <a href="{{$base}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{q .Path}}">{{.Name}}</a>{{end}}
+    <a href="{{$base}}{{if $on}}?on={{q $on}}{{end}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{q .Path}}{{if $on}}&on={{q $on}}{{end}}">{{.Name}}</a>{{end}}
   </p>
+  {{if gt (len .Agents) 1}}
+  <form method="get" action="{{$base}}" class="grid">
+    <input type="hidden" name="path" value="{{.Path}}">
+    <label>Browse and restore on
+      <select name="on" onchange="this.form.submit()">
+        {{range .Agents}}<option value="{{.ID}}"{{if eq .ID (or $on $.Job.AgentID)}} selected{{end}}>{{.Name}}{{if eq .ID $.Job.AgentID}} (the job's agent){{end}}</option>{{end}}
+      </select></label>
+    <noscript><div class="actions"><button class="plain" type="submit">Use</button></div></noscript>
+  </form>
+  {{if $on}}<p class="hint">Restores here need a target directory on that agent; in-place restores only run on the job's own agent.</p>{{end}}
+  {{end}}
   <div class="card">
     {{if .Entries}}
     <table>
@@ -12,7 +24,7 @@
       {{$path := .Path}}
       {{range .Entries}}
         <tr>
-          <td class="mono">{{if .Dir}}<a href="{{$base}}?path={{q (child $path .Name)}}">{{.Name}}/</a>{{else}}{{.Name}}{{end}}</td>
+          <td class="mono">{{if .Dir}}<a href="{{$base}}?path={{q (child $path .Name)}}{{if $on}}&on={{q $on}}{{end}}">{{.Name}}/</a>{{else}}{{.Name}}{{end}}</td>
           <td class="num">{{if .Dir}}-{{else}}{{bytes .Size}}{{end}}</td>
           <td>{{when (unixTime .ModUnix)}}</td>
         </tr>
@@ -30,6 +42,7 @@
     With a target, the snapshot is written under that empty directory instead and no containers are touched.</p>
   <div class="card">
     <form class="grid" method="post" action="{{$base}}/restore-stack">
+      <input type="hidden" name="on" value="{{$on}}">
       <label class="wide">Target directory (blank = original locations) <input name="target_root" class="mono"></label>
       <label class="check wide"><input type="checkbox" name="stop" checked> Stop the stack's containers during an in-place restore, then start them again</label>
       <label>For an in-place restore, type <span class="mono">{{.Job.Stack.Project}}</span> to confirm <input name="confirm" autocomplete="off"></label>
@@ -58,6 +71,7 @@
     (or no longer exist). With a target, the disks and <span class="mono">domain.xml</span> are written into that empty directory instead.</p>
   <div class="card">
     <form class="grid" method="post" action="{{$base}}/restore-vm">
+      <input type="hidden" name="on" value="{{$on}}">
       <label class="wide">Target directory (blank = original disk paths) <input name="target_dir" class="mono"></label>
       <label class="check wide"><input type="checkbox" name="define" checked> If the VM no longer exists, define it again from the saved domain.xml</label>
       <label>For an in-place restore, type <span class="mono">{{.Job.VM.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
@@ -67,9 +81,10 @@
   {{end}}
 
   <h2>Restore {{if .Path}}<span class="mono">/{{.Path}}</span>{{else}}this snapshot{{end}} as files</h2>
-  <p class="hint">Restores onto the job's agent host. Without overwrite the target must be empty or not exist yet.</p>
+  <p class="hint">Restores onto the agent chosen above (the job's agent by default). Without overwrite the target must be empty or not exist yet.</p>
   <div class="card">
     <form class="grid" method="post" action="{{$base}}/restore">
+      <input type="hidden" name="on" value="{{$on}}">
       <input type="hidden" name="path" value="{{.Path}}">
       <label class="wide">Target directory on the agent <input name="target" class="mono" value="{{.Target}}" required></label>
       <label class="check wide"><input type="checkbox" name="overwrite"> Overwrite existing files in the target</label>

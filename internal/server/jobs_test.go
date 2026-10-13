@@ -72,26 +72,59 @@ func TestJobBackupBrowseRestore(t *testing.T) {
 	if err != nil || len(snaps) != 1 {
 		t.Fatalf("snapshots: %+v %v", snaps, err)
 	}
-	root, err := c.Browse(ctx, job.ID, snaps[0].ID, "")
+	root, err := c.Browse(ctx, job.ID, "", snaps[0].ID, "")
 	if err != nil || len(root) != 1 || root[0].GetName() != "docs" || !root[0].GetDir() {
 		t.Fatalf("browse root (junk.tmp must be excluded): %+v %v", root, err)
 	}
 
 	target := filepath.Join(t.TempDir(), "restored")
-	rr, err := c.Restore(ctx, job.ID, snaps[0].ID, "docs", target, false)
+	rr, err := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false)
 	if err != nil || !restoreOK(rr) {
 		t.Fatalf("restore run: %+v %v", rr, err)
 	}
 	if b, err := os.ReadFile(filepath.Join(target, "note.txt")); err != nil || string(b) != "hello" {
 		t.Fatalf("restored note.txt: %q %v", b, err)
 	}
-	if rr, _ := c.Restore(ctx, job.ID, snaps[0].ID, "docs", target, false); rr.Status != catalog.RunFailed {
+	if rr, _ := c.Restore(ctx, job.ID, "", snaps[0].ID, "docs", target, false); rr.Status != catalog.RunFailed {
 		t.Fatalf("restore into a non-empty target without overwrite: %+v", rr)
 	}
 
 	runs, err := c.Catalog.ListRuns(ctx, job.ID, 10)
 	if err != nil || len(runs) != 3 || runs[0].Kind != "restore" || runs[2].Kind != "backup" {
 		t.Fatalf("runs: %+v %v", runs, err)
+	}
+}
+
+func TestRestoreOnAnotherAgent(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("backup run: %+v %v", run, err)
+	}
+	snaps, err := c.Snapshots(ctx, job.ID)
+	if err != nil || len(snaps) != 1 {
+		t.Fatalf("snapshots: %+v %v", snaps, err)
+	}
+	a2, addr2 := startAgent(t, t.TempDir())
+	other, err := enrollTestAgent(t, c, a2, "other", addr2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := c.Browse(ctx, job.ID, other.ID, snaps[0].ID, "")
+	if err != nil || len(root) != 1 || root[0].GetName() != "docs" {
+		t.Fatalf("browse on the other agent: %+v %v", root, err)
+	}
+	target := filepath.Join(t.TempDir(), "restored")
+	rr, err := c.Restore(ctx, job.ID, other.ID, snaps[0].ID, "docs", target, false)
+	if err != nil || !restoreOK(rr) || !strings.Contains(rr.Summary, " on other") {
+		t.Fatalf("restore on the other agent: %+v %v", rr, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(target, "note.txt")); err != nil || string(b) != "hello" {
+		t.Fatalf("restored note.txt: %q %v", b, err)
+	}
+	if _, err := c.Restore(ctx, job.ID, "no-such-agent", snaps[0].ID, "docs", filepath.Join(t.TempDir(), "x"), false); err == nil {
+		t.Fatal("restore on an unknown agent accepted")
 	}
 }
 

@@ -151,7 +151,11 @@ func (u *ui) newBase(title, nav string, r *http.Request) base {
 
 func redirectNotice(w http.ResponseWriter, r *http.Request, to, notice string) {
 	if notice != "" {
-		to += "?notice=" + url.QueryEscape(notice)
+		sep := "?"
+		if strings.Contains(to, "?") {
+			sep = "&"
+		}
+		to += sep + "notice=" + url.QueryEscape(notice)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // G710: callers pass local paths only
 }
@@ -665,6 +669,8 @@ type browsePage struct {
 	Entries    []*agentpb.DirEntry
 	Target     string
 	Dumps      []string // stack snapshot root only: services with a dump
+	Agents     []catalog.Agent
+	On         string // agent ID the page browses and restores on; "" is the job's own
 }
 
 func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
@@ -685,11 +691,15 @@ func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
 			p.Crumbs = append(p.Crumbs, crumb{Name: part, Path: acc})
 		}
 	}
-	if p.Entries, err = u.c.Browse(ctx, j.ID, sid, rel); err != nil {
+	p.Agents, _ = u.c.Catalog.ListAgents(ctx)
+	if on := r.URL.Query().Get("on"); on != j.AgentID {
+		p.On = on
+	}
+	if p.Entries, err = u.c.Browse(ctx, j.ID, p.On, sid, rel); err != nil {
 		p.Error = err.Error()
 	}
 	if j.Stack != nil && rel == "" {
-		dumps, _ := u.c.Browse(ctx, j.ID, sid, "dumps")
+		dumps, _ := u.c.Browse(ctx, j.ID, p.On, sid, "dumps")
 		for _, d := range dumps {
 			if name := d.GetName(); !d.GetDir() && d.GetSize() > 0 {
 				p.Dumps = append(p.Dumps, strings.TrimSuffix(name, path.Ext(name)))
@@ -697,6 +707,15 @@ func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	u.render(w, http.StatusOK, "browse", p)
+}
+
+// onQuery is the query-string tail that keeps the page on the agent picked
+// with "Restore on".
+func onQuery(on string) string {
+	if on == "" {
+		return ""
+	}
+	return "&on=" + url.QueryEscape(on)
 }
 
 func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
@@ -707,7 +726,8 @@ func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
 	}
 	rel := strings.Trim(path.Clean("/"+r.FormValue("path")), "/")
 	target, overwrite := strings.TrimSpace(r.FormValue("target")), r.FormValue("overwrite") != ""
-	back := "/jobs/" + id + "/snapshots/" + sid + "?path=" + url.QueryEscape(rel)
+	on := r.FormValue("on")
+	back := "/jobs/" + id + "/snapshots/" + sid + "?path=" + url.QueryEscape(rel) + onQuery(on)
 	if _, err := guard.RestoreTarget(target); err != nil {
 		http.Redirect(w, r, back+"&notice="+url.QueryEscape(err.Error()), http.StatusSeeOther) //nolint:gosec // G710: local path built from route segments
 		return
@@ -717,7 +737,7 @@ func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	go func() {
-		if _, err := u.c.Restore(context.Background(), id, sid, rel, target, overwrite); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.Restore(context.Background(), id, on, sid, rel, target, overwrite); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore", "job", id, "err", err)
 		}
 	}()

@@ -69,11 +69,11 @@ func TestVMJobEndToEnd(t *testing.T) {
 
 	// Running VM: in-place restore fails and is recorded as a failed run.
 	os.WriteFile(disk, []byte("damaged"), 0o644)
-	if rr, _ := c.RestoreVM(ctx, job.ID, snaps[0].ID, "", false); rr.Status != catalog.RunFailed || !strings.Contains(rr.Error, "shut down") {
+	if rr, _ := c.RestoreVM(ctx, job.ID, "", snaps[0].ID, "", false); rr.Status != catalog.RunFailed || !strings.Contains(rr.Error, "shut down") {
 		t.Fatalf("restore over a running VM: %+v", rr)
 	}
 	hv.Dom.State = virt.StateShutoff
-	rr, err := c.RestoreVM(ctx, job.ID, snaps[0].ID, "", false)
+	rr, err := c.RestoreVM(ctx, job.ID, "", snaps[0].ID, "", false)
 	if err != nil || !restoreOK(rr) {
 		t.Fatalf("in-place VM restore: %+v %v", rr, err)
 	}

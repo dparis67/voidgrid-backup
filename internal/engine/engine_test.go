@@ -141,10 +141,10 @@ func TestFilesystemRoundTrip(t *testing.T) {
 		t.Fatalf("backup of / allowed: %+v %v", res, err)
 	}
 
-	// Another host can't browse this host's snapshots.
+	// Another host can browse this host's snapshots (a restore on a new host).
 	other := newEngine(t, "host-b")
-	if _, err := other.ListDirectory(ctx, r, snaps[0].ID, ""); err == nil {
-		t.Fatal("host-b browsed host-a's snapshot")
+	if _, err := other.ListDirectory(ctx, r, snaps[0].ID, ""); err != nil {
+		t.Fatalf("host-b could not browse host-a's snapshot: %v", err)
 	}
 	// Wrong password.
 	bad := r

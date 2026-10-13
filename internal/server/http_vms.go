@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
@@ -88,7 +89,8 @@ func (u *ui) restoreVM(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	back := "/jobs/" + id + "/snapshots/" + sid
+	on := r.FormValue("on")
+	back := "/jobs/" + id + "/snapshots/" + sid + "?on=" + url.QueryEscape(on)
 	target := strings.TrimSpace(r.FormValue("target_dir"))
 	if target == "" && r.FormValue("confirm") != j.VM.Name {
 		redirectNotice(w, r, back, "Type the VM name to confirm overwriting its disks.")
@@ -106,7 +108,7 @@ func (u *ui) restoreVM(w http.ResponseWriter, r *http.Request) {
 	}
 	define := r.FormValue("define") != ""
 	go func() {
-		if _, err := u.c.RestoreVM(context.Background(), id, sid, target, define); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RestoreVM(context.Background(), id, on, sid, target, define); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore VM", "job", id, "err", err)
 		}
 	}()

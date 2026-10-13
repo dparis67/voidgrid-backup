@@ -42,19 +42,20 @@ func (c *Controller) VMs(ctx context.Context, agentID string) ([]*agentpb.VM, er
 }
 
 // RestoreVM restores a VM job's snapshot, in place (targetDir "", VM shut
-// off) or into an empty directory, and records it as a run.
-func (c *Controller) RestoreVM(ctx context.Context, jobID, snapshotID, targetDir string, define bool) (catalog.Run, error) {
+// off) or into an empty directory, and records it as a run. onID runs it on
+// another agent, which needs a targetDir.
+func (c *Controller) RestoreVM(ctx context.Context, jobID, onID, snapshotID, targetDir string, define bool) (catalog.Run, error) {
 	if targetDir != "" {
 		if _, err := guard.RestoreTarget(targetDir); err != nil {
 			return catalog.Run{}, err
 		}
 	}
-	return c.jobOp(ctx, jobID, "restore", catalog.JobVM, func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
+	return c.jobOp(ctx, jobID, onID, targetDir == "", "restore", catalog.JobVM, func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		where := "its original disk paths"
 		if targetDir != "" {
 			where = targetDir
 		}
-		run.Summary = fmt.Sprintf("restore VM %s from %s to %s", job.VM.Name, shortID(snapshotID), where)
+		run.Summary = fmt.Sprintf("restore VM %s from %s to %s%s", job.VM.Name, shortID(snapshotID), where, onHost(job, agent))
 		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 			return cl.RestoreVM(ctx, &agentpb.RestoreVMRequest{Repository: toProtoRepo(repo),
 				SnapshotId: snapshotID, TargetDir: targetDir, Define: define})

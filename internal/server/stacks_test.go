@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -119,12 +120,29 @@ func TestStackJobEndToEnd(t *testing.T) {
 	}
 
 	os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("broken"), 0o644)
-	rr, err := c.RestoreStack(ctx, job.ID, snaps[0].ID, "", true)
+	rr, err := c.RestoreStack(ctx, job.ID, "", snaps[0].ID, "", true)
 	if err != nil || !restoreOK(rr) {
 		t.Fatalf("stack restore: %+v %v", rr, err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(workdir, "docker-compose.yaml")); string(b) != "services: {}" {
 		t.Fatalf("compose file after restore: %q", b)
+	}
+
+	// On another agent only a restore into a directory is allowed.
+	a2, addr2 := startAgent(t, t.TempDir())
+	other, err := enrollTestAgent(t, c, a2, "other", addr2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RestoreStack(ctx, job.ID, other.ID, snaps[0].ID, "", true); !errors.Is(err, ErrNeedsTarget) {
+		t.Fatalf("in-place stack restore on another agent: %v", err)
+	}
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
+	if rr, err := c.RestoreStack(ctx, job.ID, other.ID, snaps[0].ID, elsewhere, false); err != nil || !restoreOK(rr) {
+		t.Fatalf("stack restore into a directory on another agent: %+v %v", rr, err)
+	}
+	if _, err := os.Stat(filepath.Join(elsewhere, "stack", "docker-compose.yaml")); err != nil {
+		t.Fatalf("stack files on the other agent: %v", err)
 	}
 
 	ir, err := c.ImportDump(ctx, job.ID, snaps[0].ID, "db")

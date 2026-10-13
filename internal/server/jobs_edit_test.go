@@ -174,7 +174,7 @@ func TestEditStackJobAddsMount(t *testing.T) {
 // hasEntry reports whether dir in a snapshot lists name; a missing dir is "no".
 func hasEntry(t *testing.T, c *Controller, jobID, snapID, dir, name string) bool {
 	t.Helper()
-	entries, err := c.Browse(context.Background(), jobID, snapID, dir)
+	entries, err := c.Browse(context.Background(), jobID, "", snapID, dir)
 	if err != nil {
 		return false
 	}

@@ -184,7 +184,8 @@ func (u *ui) restoreStack(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	back := "/jobs/" + id + "/snapshots/" + sid
+	on := r.FormValue("on")
+	back := "/jobs/" + id + "/snapshots/" + sid + "?on=" + url.QueryEscape(on)
 	target := strings.TrimSpace(r.FormValue("target_root"))
 	if target == "" && r.FormValue("confirm") != j.Stack.Project {
 		redirectNotice(w, r, back, "Type the project name to confirm restoring over the live stack.")
@@ -202,7 +203,7 @@ func (u *ui) restoreStack(w http.ResponseWriter, r *http.Request) {
 	}
 	stop := r.FormValue("stop") != ""
 	go func() {
-		if _, err := u.c.RestoreStack(context.Background(), id, sid, target, stop); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RestoreStack(context.Background(), id, on, sid, target, stop); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore stack", "job", id, "err", err)
 		}
 	}()

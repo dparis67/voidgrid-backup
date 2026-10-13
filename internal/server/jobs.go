@@ -478,9 +478,14 @@ func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) ([]S
 	return out, nil
 }
 
-func (c *Controller) Browse(ctx context.Context, jobID, snapshotID, path string) ([]*agentpb.DirEntry, error) {
+// Browse lists a directory of a snapshot on the job's agent, or on onID when
+// that is set (the job's own agent may be gone).
+func (c *Controller) Browse(ctx context.Context, jobID, onID, snapshotID, path string) ([]*agentpb.DirEntry, error) {
 	_, repo, agent, err := c.jobContext(ctx, jobID)
 	if err != nil {
+		return nil, err
+	}
+	if agent, err = c.hostFor(ctx, agent, onID); err != nil {
 		return nil, err
 	}
 	return c.browse.do(browseKey{repo.ID, snapshotID, path}, func() ([]*agentpb.DirEntry, error) {
@@ -499,9 +504,9 @@ func (c *Controller) Browse(ctx context.Context, jobID, snapshotID, path string)
 	})
 }
 
-// Restore restores path from a snapshot into target on the job's agent and
-// records it as a run of the job.
-func (c *Controller) Restore(ctx context.Context, jobID, snapshotID, path, target string, overwrite bool) (catalog.Run, error) {
+// Restore restores path from a snapshot into target on the job's agent, or on
+// onID when that is set, and records it as a run of the job.
+func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path, target string, overwrite bool) (catalog.Run, error) {
 	if _, err := guard.RestoreTarget(target); err != nil {
 		return catalog.Run{}, err
 	}
@@ -510,8 +515,11 @@ func (c *Controller) Restore(ctx context.Context, jobID, snapshotID, path, targe
 	}
 	defer c.inflight.done(jobID)
 
-	_, repo, agent, err := c.jobContext(ctx, jobID)
+	job, repo, agent, err := c.jobContext(ctx, jobID)
 	if err != nil {
+		return catalog.Run{}, err
+	}
+	if agent, err = c.hostFor(ctx, agent, onID); err != nil {
 		return catalog.Run{}, err
 	}
 	run := catalog.Run{JobID: jobID, Kind: "restore", Trigger: "manual", StartedAt: time.Now()}
@@ -527,19 +535,44 @@ func (c *Controller) Restore(ctx context.Context, jobID, snapshotID, path, targe
 	what := "/" + strings.Trim(path, "/")
 	if err != nil {
 		run.Status, run.Error = catalog.RunFailed, err.Error()
-		run.Summary = fmt.Sprintf("restore %s of %s to %s", what, shortID(snapshotID), target)
+		run.Summary = fmt.Sprintf("restore %s of %s to %s%s", what, shortID(snapshotID), target, onHost(job, agent))
 	} else {
 		run.Status = catalog.RunSuccess
 		if w := resp.GetWarnings(); len(w) > 0 {
 			run.Status, run.Error = catalog.RunPartial, strings.Join(w, "\n")
 		}
 		run.Bytes, run.Files = resp.GetBytes(), int(resp.GetFiles())
-		run.Summary = fmt.Sprintf("restored %s of %s to %s: %d files, %s", what, shortID(snapshotID), target, run.Files, HumanBytes(run.Bytes))
+		run.Summary = fmt.Sprintf("restored %s of %s to %s%s: %d files, %s", what, shortID(snapshotID), target, onHost(job, agent), run.Files, HumanBytes(run.Bytes))
 	}
 	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
 		slog.Error("record run", "job", jobID, "err", ferr)
 	}
 	return run, nil
+}
+
+// ErrNeedsTarget is returned for a restore on another agent without a target
+// directory: "original locations" only make sense on the host that was backed up.
+var ErrNeedsTarget = errors.New("a restore on another agent needs a target directory")
+
+// hostFor is the agent a browse or restore runs on: own (the job's agent),
+// or the enrolled agent onID when that is set.
+func (c *Controller) hostFor(ctx context.Context, own catalog.Agent, onID string) (catalog.Agent, error) {
+	if onID == "" || onID == own.ID {
+		return own, nil
+	}
+	a, err := c.Catalog.Agent(ctx, onID)
+	if err != nil {
+		return catalog.Agent{}, fmt.Errorf("agent: %w", err)
+	}
+	return a, nil
+}
+
+// onHost is the run-summary suffix naming the agent when it isn't the job's.
+func onHost(job catalog.Job, a catalog.Agent) string {
+	if a.ID == job.AgentID {
+		return ""
+	}
+	return " on " + a.Name
 }
 
 func (c *Controller) jobContext(ctx context.Context, jobID string) (catalog.Job, catalog.Repository, catalog.Agent, error) {

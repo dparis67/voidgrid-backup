@@ -71,9 +71,13 @@ func (a *Agent) RestoreStack(ctx context.Context, req *agentpb.RestoreStackReque
 	if err != nil {
 		return nil, err
 	}
-	dk, err := a.dockerClient()
-	if err != nil {
-		return nil, err
+	// Docker is only needed to stop the stack for an in-place restore; a
+	// restore into a directory also works on a host that has none.
+	var dk *docker.Client
+	if req.GetTargetRoot() == "" {
+		if dk, err = a.dockerClient(); err != nil {
+			return nil, err
+		}
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()

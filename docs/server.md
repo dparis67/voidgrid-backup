@@ -235,6 +235,26 @@ the agent that runs Kopia's compaction and garbage collection.
 - **Reed-Solomon error correction** (bitrot protection) costs about 2% space
   and can only be chosen when the repository is created.
 
+#### Using a repository from another agent
+
+Every request the server sends to an agent carries the repository's
+connection details and its password, so an agent that has never seen the
+repository can still open it. The password is stored once, on the server;
+you don't copy it to agents. What an agent needs on its own depends on the
+kind:
+
+| Kind | Needed on the other agent |
+|---|---|
+| S3 | Nothing. The access key and secret are part of the repository. |
+| SFTP with a password | Nothing. |
+| SFTP with a key file | The key file at the **same path** as in the repository (e.g. `/keys/sftp_key`), and its public key authorized on the SFTP server. See [SFTP key naming](agent.md#sftp-key-naming). |
+| Filesystem | The same directory reachable from that agent (a shared mount). |
+
+This is what makes a restore on a different agent work (below). Each agent
+should still back up to its own repository: several agents writing to one
+repository is untested, and a Storage Box limits the number of simultaneous
+connections.
+
 #### Maintenance
 
 Maintenance (compaction and garbage collection) is run by the repository's
@@ -318,6 +338,27 @@ never half-completes over existing data.
 
 Stack and VM snapshots also offer a whole-stack / whole-VM restore and, for
 stacks, "import dump". In-place restores ask you to type the stack or VM name.
+
+#### Restoring on a different agent
+
+With more than one agent enrolled, the snapshot page has a **Browse and
+restore on** picker. It defaults to the job's own agent. Pick another one to
+browse the snapshot and restore it there, for example when the job's host is
+gone or you want the data on a new machine. The snapshot list comes from the
+server, so the page opens even when the job's agent is down.
+
+- A restore on another agent always goes into a **target directory** (empty or
+  not yet existing, as usual). "Original locations" and in-place restores of
+  stacks and VMs run only on the job's own agent.
+- Stack and VM restores into a directory write the snapshot's files there
+  (`stack/`, `mounts/`, `dumps/`, or the disks and `domain.xml`) and touch no
+  containers or VMs, so that agent needs neither Docker nor libvirt. Putting
+  the stack or VM back into service afterwards is manual.
+- The other agent must be able to open the repository (see
+  [above](#using-a-repository-from-another-agent)) and have a writable
+  directory for the target ([Paths and read-only mounts](agent.md#paths-and-read-only-mounts)).
+- The run is recorded under the original job, and its summary names the agent
+  it ran on.
 
 ### Notifications
 

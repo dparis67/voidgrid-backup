@@ -79,6 +79,54 @@ the agent refuses an in-place restore to them up front and the UI marks them
 agent one writable directory for that (`RESTORE_DIR` in the example). Mount a
 path read-write only if you want in-place restores of it.
 
+## SFTP key naming
+
+An SFTP repository stores one key file **path**, and that path is read
+inside the agent. For a repository to be usable from more than one agent
+(see [Using a repository from another agent](server.md#using-a-repository-from-another-agent)),
+give every agent a key at that same in-container path, with a different
+key behind it.
+
+- Use one key pair per agent, named after the host, e.g.
+  `voidgrid_<hostname>` on that host, mounted read-only at the path the
+  repository uses:
+
+  ```yaml
+  volumes:
+    - /root/.ssh/voidgrid_<hostname>:/keys/sftp_key:ro
+  ```
+
+- Authorize each public key on the SFTP server, one line per agent with the
+  host name as the comment, so a single host can be revoked by deleting its
+  line:
+
+  ```
+  ssh-ed25519 AAAA... voidgrid_<hostname>
+  ```
+
+  On a Hetzner Storage Box this is the `.ssh/authorized_keys` file in its
+  home directory.
+- Don't reuse one key everywhere unless you accept that revoking it cuts off
+  every host at once.
+- The key file must be readable by the user the agent runs as.
+
+The `known_hosts` entry is part of the repository, so it doesn't need
+distributing.
+
+## Restoring on a different host
+
+The server can run a restore on any enrolled agent (see
+[Restoring on a different agent](server.md#restoring-on-a-different-agent)).
+Prepare the agent that will receive it ahead of time, not during an incident:
+
+- Mount a writable directory for the target (`RESTORE_DIR` in the example).
+- For an SFTP repository with a key file, mount a key at the path the
+  repository uses ([SFTP key naming](#sftp-key-naming)).
+- A restore into a directory needs no Docker socket or libvirt socket. Only
+  in-place restores do, and those run on the job's own agent only.
+- Snapshots written by another host are readable. The agent opens the
+  repository the first time it is asked.
+
 ## Health check
 
 `/healthz` on `VB_HEALTH_LISTEN` returns JSON:
@@ -229,5 +277,7 @@ A **shut-off** VM is copied directly.
 | Stacks page: "no Docker socket configured" | The socket volume and `VB_DOCKER_SOCKET` |
 | VMs page: "no libvirt socket configured" | The socket volume and `VB_LIBVIRT_SOCKET` |
 | "is mounted read-only in the agent" on restore | Intended: restore to a directory, or mount that path read-write |
+| Restore on another agent: "connect to repository" fails | The key file is not at the repository's path in that agent, its public key is not authorized, or the storage is not reachable from that host |
+| Restore on another agent: "a restore on another agent needs a target directory" | Enter a target directory; in-place restores run only on the job's own agent |
 | Partial backup: "could not read ..." | Capabilities and SELinux (see Permissions) |
 | Snapshots missing after redeploying an agent | It registered as a new agent; approve it as replacing the old one to keep its ID |
