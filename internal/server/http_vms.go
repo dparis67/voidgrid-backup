@@ -14,8 +14,10 @@ import (
 )
 
 type vmView struct {
-	VM       *agentpb.VM
-	Existing string // job already backing up this VM on this agent
+	VM   *agentpb.VM
+	Job  *catalog.Job // the job already backing up this VM on this agent
+	Last *catalog.Run // its latest backup
+	Edit *editPage    // its edit form
 }
 
 type vmsPage struct {
@@ -47,7 +49,11 @@ func (u *ui) vms(w http.ResponseWriter, r *http.Request) {
 		v := vmView{VM: vm}
 		for _, j := range jobs {
 			if j.AgentID == agent.ID && j.VM != nil && j.VM.Name == vm.GetName() {
-				v.Existing = j.Name
+				v.Job, v.Edit = &j, &editPage{Job: j, Live: true, Embedded: true}
+				v.Edit.fillVM(vms, nil)
+				if last, err := u.c.Catalog.LastRun(ctx, j.ID, "backup"); err == nil {
+					v.Last = &last
+				}
 			}
 		}
 		p.VMs = append(p.VMs, v)

@@ -7,7 +7,13 @@
   {{$agent := .Agent}}{{$repos := .Repos}}{{$keep := .Keep}}
   {{if not .VMs}}{{if not .Error}}<div class="card"><div class="empty">No VMs found on this host.</div></div>{{end}}{{end}}
   {{range .VMs}}
-  <h2>{{.VM.Name}} <span class="{{if eq .VM.State "running"}}ok{{else}}muted{{end}}">{{.VM.State}}</span></h2>
+  <details class="fold">
+    <summary>
+      <span class="fold-name">{{.VM.Name}}</span>
+      <span class="{{if eq .VM.State "running"}}ok{{else}}muted{{end}}">{{.VM.State}}</span>
+      {{template "foldjob" .}}
+    </summary>
+    <div class="fold-body">
   <div class="card">
     <table>
       <thead><tr><th>Disk</th><th>Device</th><th>Source</th><th>Format</th><th>Notes</th></tr></thead>
@@ -24,8 +30,9 @@
       </tbody>
     </table>
   </div>
-  {{if .Existing}}
-    <p class="hint">Already backed up by job <strong>{{.Existing}}</strong>.</p>
+  {{if .Job}}
+  <h3>Backup job <a href="/jobs/{{.Job.ID}}">{{.Job.Name}}</a></h3>
+  {{template "jobeditform" .Edit}}
   {{else if not $repos}}
     <p class="hint">Add a repository first.</p>
   {{else}}
@@ -57,5 +64,7 @@
     </form>
   </div>
   {{end}}
+    </div>
+  </details>
   {{end}}
 {{template "bottom" .}}{{end}}

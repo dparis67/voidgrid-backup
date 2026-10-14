@@ -8,6 +8,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
+	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
 
 type editMount struct {
@@ -37,6 +38,8 @@ type editPage struct {
 	// Live is false when the agent couldn't be asked what exists now, so the
 	// form shows only what the job already has.
 	Live bool
+	// Embedded is the form inside a card on the stacks or VMs page, not its own page.
+	Embedded bool
 }
 
 // editJob shows the edit form. What the agent has right now (mounts, dumps,
@@ -60,8 +63,14 @@ func (u *ui) editJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *ui) editStackView(r *http.Request, p *editPage) {
-	st := p.Job.Stack
 	stacks, err := u.c.Stacks(r.Context(), p.Job.AgentID)
+	p.fillStack(stacks, err)
+}
+
+// fillStack merges the stacks the agent reported (err if it couldn't) with
+// what the job already lists.
+func (p *editPage) fillStack(stacks []*agentpb.Stack, err error) {
+	st := p.Job.Stack
 	if err != nil {
 		p.Live, p.Error = false, "Could not reach the agent ("+err.Error()+"), so only what the job already has is shown."
 	}
@@ -111,8 +120,12 @@ func (u *ui) editStackView(r *http.Request, p *editPage) {
 }
 
 func (u *ui) editVMView(r *http.Request, p *editPage) {
-	vc := p.Job.VM
 	vms, err := u.c.VMs(r.Context(), p.Job.AgentID)
+	p.fillVM(vms, err)
+}
+
+func (p *editPage) fillVM(vms []*agentpb.VM, err error) {
+	vc := p.Job.VM
 	if err != nil {
 		p.Live, p.Error = false, "Could not reach the agent ("+err.Error()+"), so only what the job already has is shown."
 	}

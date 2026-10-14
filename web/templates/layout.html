@@ -49,6 +49,17 @@
   .mono { font-family: var(--font); font-size: 13px; }
   .ok, .success { color: var(--ok); } .bad, .failed { color: var(--bad); } .warn, .partial, .running { color: var(--warn); }
   .muted { color: var(--muted); }
+  details.fold { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; }
+  details.fold > summary { padding: 10px 14px; cursor: pointer; display: flex; gap: 6px 12px; align-items: baseline;
+                           flex-wrap: wrap; list-style: none; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "\25B8"; color: var(--muted); }
+  details.fold[open] > summary::before { content: "\25BE"; }
+  details.fold[open] > summary { border-bottom: 1px solid var(--line); }
+  .fold-name { font-weight: 600; }
+  .fold-body { padding: 4px 14px 14px; }
+  .fold-body h3 { font-size: 14px; margin: 16px 0 8px; }
+  .tag { font-size: 12px; padding: 1px 8px; border: 1px solid currentColor; border-radius: 999px; }
   .wrap { white-space: pre-wrap; }
   .err { white-space: pre-wrap; color: var(--bad); font-size: 13px; }
   .empty { padding: 16px 14px; color: var(--muted); }
@@ -180,8 +191,24 @@
     }
     worker(); worker();
   }
-  var rows = document.querySelectorAll("[data-usage]");
-  run(Array.prototype.map.call(rows, function (el) { return [el.dataset.agent, el.dataset.path, el]; }));
+  // Rows inside a collapsed card are measured when it is first opened, so a page
+  // with many stacks doesn't walk every mount at load.
+  function start(rows) {
+    run(Array.prototype.filter.call(rows, function (el) {
+      if (el.dataset.started) return false;
+      el.dataset.started = "1";
+      return true;
+    }).map(function (el) { return [el.dataset.agent, el.dataset.path, el]; }));
+  }
+  start(Array.prototype.filter.call(document.querySelectorAll("[data-usage]"), function (el) {
+    var d = el.closest("details");
+    return !d || d.open;
+  }));
+  Array.prototype.forEach.call(document.querySelectorAll("details.fold"), function (d) {
+    d.addEventListener("toggle", function () {
+      if (d.open) start(d.querySelectorAll("[data-usage]"));
+    });
+  });
 
   function cell(tag, text, cls) {
     var c = document.createElement(tag);

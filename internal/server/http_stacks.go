@@ -33,13 +33,15 @@ type dumpOpt struct {
 }
 
 type stackView struct {
-	Stack    *agentpb.Stack
-	Mounts   []mountOpt
-	Dumps    []dumpOpt
-	SQLite   []string
-	DuckDB   []string
-	Quiesce  string
-	Existing string // name of a job already backing up this project on this agent
+	Stack   *agentpb.Stack
+	Mounts  []mountOpt
+	Dumps   []dumpOpt
+	SQLite  []string
+	DuckDB  []string
+	Quiesce string
+	Job     *catalog.Job // the job already backing up this project on this agent
+	Last    *catalog.Run // its latest backup
+	Edit    *editPage    // its edit form
 }
 
 type stacksPage struct {
@@ -71,7 +73,11 @@ func (u *ui) stacks(w http.ResponseWriter, r *http.Request) {
 		v := buildStackView(st)
 		for _, j := range jobs {
 			if j.AgentID == agent.ID && j.Stack != nil && j.Stack.Project == st.GetProject() {
-				v.Existing = j.Name
+				v.Job, v.Edit = &j, &editPage{Job: j, Live: true, Embedded: true}
+				v.Edit.fillStack(stacks, nil)
+				if last, err := u.c.Catalog.LastRun(ctx, j.ID, "backup"); err == nil {
+					v.Last = &last
+				}
 			}
 		}
 		p.Stacks = append(p.Stacks, v)

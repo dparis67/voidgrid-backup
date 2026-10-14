@@ -2,6 +2,12 @@
   {{$job := .Job}}
   <h2>Edit {{$job.Name}}</h2>
   <p class="hint">Changes apply from the next backup. Existing snapshots are untouched, and the next run only uploads what is new or changed. The agent, repository{{if $job.Stack}}, compose project{{end}}{{if $job.VM}} and VM{{end}} are fixed; create a new job to change them.</p>
+  {{template "jobeditform" .}}
+{{template "bottom" .}}{{end}}
+
+
+{{define "jobeditform"}}
+  {{$job := .Job}}
   <div class="card">
     <form class="grid" method="post" action="/jobs/{{$job.ID}}/edit">
       <label>Job name <input name="name" value="{{$job.Name}}" required></label>
@@ -74,7 +80,7 @@
       </div>
       <p class="hint wide">Lowering a retention count deletes the older snapshots it no longer keeps, at the next backup. That can't be undone.</p>
       <label class="check wide"><input type="checkbox" name="enabled" {{if $job.Enabled}}checked{{end}}> Schedule enabled</label>
-      <div class="actions"><button type="submit">Save</button> <a href="/jobs/{{$job.ID}}">Cancel</a></div>
+      <div class="actions"><button type="submit">Save</button> {{if .Embedded}}<a href="/jobs/{{$job.ID}}">Open job</a>{{else}}<a href="/jobs/{{$job.ID}}">Cancel</a>{{end}}</div>
     </form>
   </div>
-{{template "bottom" .}}{{end}}
+{{end}}

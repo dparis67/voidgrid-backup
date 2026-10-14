@@ -82,7 +82,10 @@ func TestStackJobEndToEnd(t *testing.T) {
 	if len(v.Dumps) != 1 || v.Dumps[0].Default != "postgres" {
 		t.Fatalf("dump defaults: %+v", v.Dumps)
 	}
-	get(t, client, srv.URL+"/agents/"+ag.ID+"/stacks", "Create stack job")
+	page := get(t, client, srv.URL+"/agents/"+ag.ID+"/stacks", "Create stack job")
+	if !strings.Contains(page, `<details class="fold">`) || !strings.Contains(page, "no job") {
+		t.Fatalf("stack card without a job:\n%s", page)
+	}
 
 	// Create the job through the form, the way the page submits it.
 	form := url.Values{
@@ -95,6 +98,12 @@ func TestStackJobEndToEnd(t *testing.T) {
 	job, err := c.Catalog.JobByName(ctx, "notes")
 	if err != nil || job.Stack == nil || len(job.Stack.Exclude) != 2 || job.Stack.Dumps["db"] != "postgres" {
 		t.Fatalf("stack job: %+v %v", job, err)
+	}
+
+	// With a job the card says so and holds the edit form instead of the create form.
+	page = get(t, client, srv.URL+"/agents/"+ag.ID+"/stacks", "backed up")
+	if !strings.Contains(page, `action="/jobs/`+job.ID+`/edit"`) || strings.Contains(page, "Create stack job") {
+		t.Fatalf("stack card with a job:\n%s", page)
 	}
 
 	run, err := c.RunJob(ctx, job.ID, "manual")

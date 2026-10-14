@@ -43,7 +43,9 @@ func TestVMJobEndToEnd(t *testing.T) {
 	defer srv.Close()
 	client := authedClient(t, c, srv)
 
-	get(t, client, srv.URL+"/agents/"+ag.ID+"/vms", "Create VM job")
+	if page := get(t, client, srv.URL+"/agents/"+ag.ID+"/vms", "Create VM job"); !strings.Contains(page, "no job") {
+		t.Fatalf("VM card without a job:\n%s", page)
+	}
 	post(t, client, srv.URL+"/jobs/vm", url.Values{
 		"agent": {ag.ID}, "vm": {"ha"}, "name": {"vm-ha"}, "repository": {repo.ID}, "disk": {"vda"}, "quiesce": {"on"},
 		"schedule": {""}, "keep_latest": {"3"}, "keep_hourly": {"0"}, "keep_daily": {"7"},
@@ -52,6 +54,10 @@ func TestVMJobEndToEnd(t *testing.T) {
 	job, err := c.Catalog.JobByName(ctx, "vm-ha")
 	if err != nil || job.Kind != catalog.JobVM || job.VM.Name != "ha" || !job.VM.Quiesce {
 		t.Fatalf("vm job: %+v %v", job, err)
+	}
+
+	if page := get(t, client, srv.URL+"/agents/"+ag.ID+"/vms", "backed up"); !strings.Contains(page, `action="/jobs/`+job.ID+`/edit"`) || strings.Contains(page, "Create VM job") {
+		t.Fatalf("VM card with a job:\n%s", page)
 	}
 
 	run, err := c.RunJob(ctx, job.ID, "manual")

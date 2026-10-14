@@ -6,7 +6,13 @@
   {{$agent := .Agent}}{{$repos := .Repos}}{{$keep := .Keep}}
   {{if not .Stacks}}{{if not .Error}}<div class="card"><div class="empty">No compose stacks found on this host.</div></div>{{end}}{{end}}
   {{range .Stacks}}
-  <h2>{{.Stack.Project}} <span class="muted mono">{{.Stack.WorkingDir}}</span></h2>
+  <details class="fold">
+    <summary>
+      <span class="fold-name">{{.Stack.Project}}</span>
+      <span class="muted mono">{{.Stack.WorkingDir}}</span>
+      {{template "foldjob" .}}
+    </summary>
+    <div class="fold-body">
   <div class="card">
     <table>
       <thead><tr><th>Service</th><th>Image</th><th>State</th><th>Detected</th></tr></thead>
@@ -22,8 +28,9 @@
       </tbody>
     </table>
   </div>
-  {{if .Existing}}
-    <p class="hint">Already backed up by job <strong>{{.Existing}}</strong>.</p>
+  {{if .Job}}
+  <h3>Backup job <a href="/jobs/{{.Job.ID}}">{{.Job.Name}}</a></h3>
+  {{template "jobeditform" .Edit}}
   {{else if not $repos}}
     <p class="hint">Add a repository first.</p>
   {{else}}
@@ -91,5 +98,11 @@
     </form>
   </div>
   {{end}}
+    </div>
+  </details>
   {{end}}
 {{template "bottom" .}}{{end}}
+
+{{define "foldjob"}}{{if .Job}}<span class="tag ok">backed up</span>
+      <span class="muted">{{.Job.Name}} · {{if .Job.Schedule}}<span class="mono">{{.Job.Schedule}}</span>{{else}}manual{{end}}{{if not .Job.Enabled}} · schedule off{{end}}</span>
+      {{if .Last}}<span class="{{.Last.Status}}">{{.Last.Status}} {{ago .Last.StartedAt}}</span>{{end}}{{else}}<span class="tag muted">no job</span>{{end}}{{end}}
