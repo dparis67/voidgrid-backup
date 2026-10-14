@@ -48,6 +48,22 @@
   form.inline { display: inline; margin: 0; }
   input.sched { width: 11em; padding: 3px 6px; }
   td .warn { font-size: 12px; white-space: normal; max-width: 22em; }
+  .tl-wrap { overflow-x: auto; }
+  .tl { min-width: 900px; padding: 8px 0; }
+  .tl-lane { display: flex; align-items: flex-start; margin: 2px 0; }
+  .tl-label { flex: 0 0 11em; padding: 4px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-track { position: relative; flex: 1; margin-right: 12px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .tl-head .tl-track { border: 0; }
+  .tl-tick { position: absolute; top: 0; font-size: 11px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+  .tl-line { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); opacity: .5; }
+  .tl-now { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--warn); }
+  .tl-bar { position: absolute; height: 20px; line-height: 18px; padding: 0 4px; overflow: hidden; white-space: nowrap; font-size: 12px;
+            background: var(--card); color: var(--fg); border: 1px solid var(--accent); border-radius: var(--radius); }
+  .tl-bar:hover { background: var(--accent); color: var(--on-accent); text-decoration: none; }
+  .tl-bar.clash { border-color: var(--warn); color: var(--warn); }
+  .tl-bar.guess { border-style: dashed; }
+  .tl-bar.past { opacity: .55; }
+  p a.on { font-weight: 600; text-decoration: underline; }
   tr:last-child td { border-bottom: 0; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .mono { font-family: var(--font); font-size: 13px; }
@@ -112,6 +128,7 @@
     <a href="/" {{if eq .Nav "agents"}}class="on"{{end}}>Agents</a>
     <a href="/repositories" {{if eq .Nav "repos"}}class="on"{{end}}>Repositories</a>
     <a href="/jobs" {{if eq .Nav "jobs"}}class="on"{{end}}>Jobs</a>
+    <a href="/schedule" {{if eq .Nav "schedule"}}class="on"{{end}}>Schedule</a>
     <a href="/logs" {{if eq .Nav "logs"}}class="on"{{end}}>Logs</a>
     <a href="/notifications" {{if eq .Nav "notifications"}}class="on"{{end}}>Notifications</a>
     <a href="/authentication" {{if eq .Nav "authentication"}}class="on"{{end}}>Authentication</a>

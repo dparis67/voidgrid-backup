@@ -447,6 +447,23 @@ container. It needs no agent, Docker or libvirt.
 - If the server itself is gone too, use
   [voidgrid-backup-recover](recovery.md).
 
+### Schedule
+
+The **Schedule** page draws the next 24 hours as a timeline, one lane per agent
+(or per repository with the link above it). Each scheduled job is a bar from
+its start time for as long as its backups take; click a bar to open the job.
+The line marks now, and bars that have already started are dimmed.
+
+- A job's length is the longest of its last 20 finished backups. The first
+  backup is the longest by design, so it sets the reservation until later
+  runs are longer. A dashed bar has no finished backup yet and assumes 15
+  minutes.
+- Jobs on one agent run one after another, so overlapping bars in an agent
+  lane wait for each other. Jobs on one repository share its connections and
+  bandwidth. Overlapping bars are stacked and drawn in the warning colour.
+- Manual and switched-off jobs are listed under the timeline. Schedules are
+  edited on the Jobs page; this page only shows them.
+
 ### Notifications
 
 One server-wide setting, not per-job: a **scheduled** job that finishes

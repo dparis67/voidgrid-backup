@@ -1,11 +1,14 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/robfig/cron/v3"
+
+	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 )
 
 const (
@@ -17,9 +20,43 @@ const (
 
 type slot struct{ start, end time.Time }
 
-// jobSlots lists when a scheduled job would occupy its host over the horizon:
-// each start time, lasting as long as its last backup took.
-func jobSlots(r jobRow, now time.Time) []slot {
+// jobDuration is how long a run of the job is expected to take: the longest of
+// its last 20 finished backups (the first backup is the longest by design, and
+// later ones are incremental, so this is a safe upper bound), never under
+// overlapMin. A job with no finished backup yet gets overlapDefault and
+// guess=true.
+func (c *Controller) jobDuration(ctx context.Context, jobID string) (d time.Duration, guess bool) {
+	runs, err := c.Catalog.ListRuns(ctx, jobID, 20)
+	if err != nil {
+		return overlapDefault, true
+	}
+	for _, r := range runs {
+		if r.Kind != "backup" || r.FinishedAt.IsZero() || (r.Status != catalog.RunSuccess && r.Status != catalog.RunPartial) {
+			continue
+		}
+		d = max(d, r.FinishedAt.Sub(r.StartedAt))
+	}
+	if d <= 0 {
+		return overlapDefault, true
+	}
+	return max(d, overlapMin), false
+}
+
+// rowDur is the expected length of a job's run: its Dur when known, else the
+// last backup's, else the default.
+func rowDur(r jobRow) time.Duration {
+	switch {
+	case r.Dur > 0:
+		return r.Dur
+	case r.Last != nil && !r.Last.FinishedAt.IsZero():
+		return max(r.Last.FinishedAt.Sub(r.Last.StartedAt), overlapMin)
+	}
+	return overlapDefault
+}
+
+// slotsBetween lists when a scheduled job would occupy its host between from
+// (inclusive) and to: each start time, lasting rowDur.
+func slotsBetween(r jobRow, from, to time.Time) []slot {
 	if !r.Enabled || r.Schedule == "" {
 		return nil
 	}
@@ -27,15 +64,17 @@ func jobSlots(r jobRow, now time.Time) []slot {
 	if err != nil {
 		return nil
 	}
-	d := overlapDefault
-	if r.Last != nil && !r.Last.FinishedAt.IsZero() {
-		d = max(r.Last.FinishedAt.Sub(r.Last.StartedAt), overlapMin)
-	}
+	d := rowDur(r)
 	var out []slot
-	for t := sched.Next(now); t.Before(now.Add(overlapHorizon)) && len(out) < overlapMaxStart; t = sched.Next(t) {
+	for t := sched.Next(from.Add(-time.Nanosecond)); t.Before(to) && len(out) < overlapMaxStart; t = sched.Next(t) {
 		out = append(out, slot{t, t.Add(d)})
 	}
 	return out
+}
+
+// jobSlots is slotsBetween for the next 24 hours.
+func jobSlots(r jobRow, now time.Time) []slot {
+	return slotsBetween(r, now, now.Add(overlapHorizon))
 }
 
 // findClashes maps a job ID to a note for every other scheduled job it would

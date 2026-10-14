@@ -34,6 +34,7 @@ func NewHandler(c *Controller) http.Handler {
 	u := &ui{c: c, tmpl: template.Must(template.New("").Funcs(template.FuncMap{
 		"ago":       ago,
 		"took":      took,
+		"mul24":     func(n int) int { return n*24 + 4 },
 		"sub1":      func(n int) int { return n - 1 },
 		"sortHeads": sortHeads,
 		"when":      func(t time.Time) string { return whenStr(t) },
@@ -76,6 +77,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /notifications/test", u.testNotifications)
 	mux.HandleFunc("GET /logs", u.logs)
 	mux.HandleFunc("GET /jobs", u.jobs)
+	mux.HandleFunc("GET /schedule", u.schedule)
 	mux.HandleFunc("POST /jobs", u.addJob)
 	mux.HandleFunc("GET /jobs/{id}", u.job)
 	mux.HandleFunc("POST /jobs/{id}/run", u.runJob)
@@ -449,7 +451,9 @@ type jobRow struct {
 	Last        *catalog.Run
 	Next        time.Time
 	Running     bool
-	Clashes     []string // other jobs it would run alongside in the next 24 h
+	Clashes     []string      // other jobs it would run alongside in the next 24 h
+	Dur         time.Duration // how long a run is expected to take; see jobDuration
+	DurGuess    bool          // Dur is a default: the job has no finished backup yet
 }
 
 type jobsPage struct {
@@ -515,6 +519,7 @@ func (u *ui) jobRow(ctx context.Context, j catalog.Job, agents []catalog.Agent, 
 	if last, err := u.c.Catalog.LastRun(ctx, j.ID, "backup"); err == nil {
 		row.Last = &last
 	}
+	row.Dur, row.DurGuess = u.c.jobDuration(ctx, j.ID)
 	if j.Enabled && j.Schedule != "" {
 		row.Next, _ = NextRun(ctx, u.c.Catalog, j)
 	}
