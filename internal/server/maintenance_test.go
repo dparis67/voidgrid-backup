@@ -55,6 +55,9 @@ func TestMaintainRepositoryFindsTheOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := c.AssignAgent(ctx, job.RepositoryID, agB.ID, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := c.AddJob(ctx, JobInput{Name: "b-job", AgentID: agB.ID, RepositoryID: job.RepositoryID,
 		Paths: []string{t.TempDir()}, Keep: catalog.DefaultRetention}); err != nil {
 		t.Fatal(err)

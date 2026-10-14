@@ -62,7 +62,7 @@ func (c *Controller) RefreshRepoStats(ctx context.Context, repoID string) (RepoS
 	}
 	defer release()
 	resp, err := withAgent(c, agent, repoStatsTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RepoStatsResponse, error) {
-		return cl.RepoStats(ctx, &agentpb.RepoStatsRequest{Repository: toProtoRepo(repo)})
+		return cl.RepoStats(ctx, &agentpb.RepoStatsRequest{Repository: toProtoRepo(repo, agent.ID)})
 	})
 	if err != nil {
 		return RepoStats{}, err

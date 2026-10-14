@@ -36,7 +36,7 @@ func (u *ui) vms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := vmsPage{base: u.newBase(agent.Name+" VMs", "agents", r), Agent: agent, Keep: catalog.DefaultRetention}
-	if p.Repos, err = u.c.Catalog.ListRepositories(ctx); err != nil {
+	if p.Repos, err = u.c.ReposFor(ctx, agent.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

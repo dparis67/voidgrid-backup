@@ -121,3 +121,37 @@ func (u *ui) setMaintainer(w http.ResponseWriter, r *http.Request) {
 	}
 	redirectNotice(w, r, "/repositories", msg)
 }
+
+// assignAgent tests that an agent can open the repository, then lets it use it.
+func (u *ui) assignAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rp, err := u.c.Catalog.Repository(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	warnings, err := u.c.AssignAgent(r.Context(), id, r.FormValue("agent"), r.FormValue("key_file"))
+	if err != nil {
+		redirectNotice(w, r, "/repositories", "Not assigned: "+err.Error())
+		return
+	}
+	msg := "The agent opened " + rp.Name + " and can use it now."
+	if len(warnings) > 0 {
+		msg += " Warning: " + strings.Join(warnings, " ")
+	}
+	redirectNotice(w, r, "/repositories", msg)
+}
+
+func (u *ui) unassignAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rp, err := u.c.Catalog.Repository(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := u.c.UnassignAgent(r.Context(), id, r.PathValue("agent")); err != nil {
+		redirectNotice(w, r, "/repositories", "Not removed: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, "/repositories", "The agent can no longer get new jobs on "+rp.Name+".")
+}

@@ -16,7 +16,7 @@
   <div class="card">
     {{if .Repos}}
     <table>
-      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Stored</th><th>Initialized</th><th>Maintenance</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Agents</th><th>Stored</th><th>Initialized</th><th>Maintenance</th><th></th></tr></thead>
       <tbody>
       {{range .Repos}}
         <tr>
@@ -26,6 +26,23 @@
             <div class="hint">Local path on the agent.{{if .Config.Filesystem.ServerPath}} The server sees it at <span class="mono">{{.Config.Filesystem.ServerPath}}</span>.{{else}} The server can maintain it only if the same directory is mounted in the server container (set below).{{end}}</div>{{end}}</td>
           <td>{{if .Config.ECC}}<span class="ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
           <td class="num">{{.Jobs}}</td>
+          <td>
+            {{$r := .}}
+            {{range .Assigned}}<div>{{.Name}} {{if .Jobs}}<span class="muted">{{.Jobs}} job(s)</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/remove" style="display:inline"><button class="plain" type="submit">Unassign</button></form>{{end}}</div>{{else}}<span class="muted">none</span>{{end}}
+            {{if and (gt (len .Assigned) 1) (eq .MaintBy "agent")}}<div class="hint">Shared by several agents: let the server maintain it (Maintainer…).</div>{{end}}
+            {{if not .InitializedAt.IsZero}}
+            <details>
+              <summary>Assign an agent…</summary>
+              <form method="post" action="/repositories/{{.ID}}/agents">
+                <p class="hint">The agent opens the repository first (it never creates anything) and is assigned only if that works. Picking an agent that is already assigned tests it again{{if eq .Config.Kind "sftp"}} or changes its key{{end}}. Only assigned agents can get new jobs on this repository.</p>
+                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+                {{if eq .Config.Kind "sftp"}}<label>Key file on that agent <input class="mono" name="key_file" placeholder="{{.Config.SFTP.KeyFile}}"></label>
+                <p class="hint">Blank uses the repository's key path. Give each agent its own key, authorized for the same user on the SFTP server.</p>{{end}}
+                <button class="plain" type="submit">Test and assign</button>
+              </form>
+            </details>
+            {{end}}
+          </td>
           <td>
             {{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}</span>{{else}}<span class="muted">not measured</span>{{end}}
             {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" style="display:inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}
@@ -81,7 +98,7 @@
   {{if .Measuring}}<div id="live" data-ids="repo-table" data-every="3000" hidden></div>{{end}}
 
   <h2>Add a repository</h2>
-  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its maintenance owner. Only the fields for the selected kind are used.</p>
+  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its first assigned agent. The SFTP path and S3 prefix start as <span class="mono">&lt;agent-id&gt;-backup</span> so unrelated data never shares a directory; change it if you want a different layout. Only the fields for the selected kind are used.</p>
   {{if not .Agents}}<div class="card"><div class="empty">Register and approve an agent first.</div></div>{{else}}
   <div class="card">
     <form class="grid" method="post" action="/repositories">
@@ -133,4 +150,23 @@
     </form>
   </div>
   {{end}}
+  <script>
+  // New repositories default to their own directory, named after the agent that
+  // creates them, so a shared storage account never mixes unrelated data. Only
+  // an empty (or still defaulted) field is filled; nothing typed is overwritten.
+  (function () {
+    var f = document.querySelector('form[action="/repositories"]');
+    if (!f) return;
+    var agent = f.querySelector('select[name=agent]');
+    var fields = ["sftp_path", "s3_prefix"].map(function (n) { return f.querySelector("[name=" + n + "]"); }).filter(Boolean);
+    var last = {};
+    function fill() {
+      var want = agent.value + "-backup";
+      fields.forEach(function (el) {
+        if (el.value === "" || el.value === last[el.name]) { el.value = want; last[el.name] = want; }
+      });
+    }
+    if (agent) { agent.addEventListener("change", fill); fill(); }
+  })();
+  </script>
 {{template "bottom" .}}{{end}}

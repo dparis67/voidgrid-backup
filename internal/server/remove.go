@@ -107,7 +107,7 @@ func (c *Controller) StartWipe(ctx context.Context, repoID, agentID string) erro
 		bg := context.Background()
 		slog.Warn("repository wipe requested", "repo", repo.ID, "name", repo.Name, "agent", agent.Name)
 		resp, err := withAgent(c, agent, wipeTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.WipeRepositoryResponse, error) {
-			return cl.WipeRepository(ctx, &agentpb.WipeRepositoryRequest{Repository: toProtoRepo(repo)})
+			return cl.WipeRepository(ctx, &agentpb.WipeRepositoryRequest{Repository: toProtoRepo(repo, agent.ID)})
 		})
 		if err != nil {
 			slog.Error("repository wipe failed", "repo", repo.ID, "agent", agent.Name, "err", err)
@@ -150,7 +150,7 @@ func (c *Controller) DeleteSnapshot(ctx context.Context, jobID, snapshotID strin
 		return errors.New("that snapshot is not in the job's list; refresh the list from the repository first")
 	}
 	if _, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
-		return cl.DeleteSnapshot(ctx, &agentpb.DeleteSnapshotRequest{Repository: toProtoRepo(repo), SnapshotId: snapshotID})
+		return cl.DeleteSnapshot(ctx, &agentpb.DeleteSnapshotRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID})
 	}); err != nil {
 		return fmt.Errorf("delete on %s: %w", agent.Name, err)
 	}

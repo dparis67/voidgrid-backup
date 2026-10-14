@@ -80,10 +80,10 @@ func TestServerMaintainsRepository(t *testing.T) {
 	if got.Config.Filesystem.ServerPath != dir {
 		t.Fatalf("server path = %q", got.Config.Filesystem.ServerPath)
 	}
-	if strings.Contains(string(toProtoRepo(got).GetConfigJson()), "server_path") {
+	if strings.Contains(string(toProtoRepo(got, "").GetConfigJson()), "server_path") {
 		t.Fatal("the server-only path was sent to the agent")
 	}
-	if owner, _ := eng.MaintenanceOwner(ctx, engine.Repo{ID: repo.ID, Config: got.Config.ForAgent(), Password: repo.Password}); owner != eng.UsernameAtHost() {
+	if owner, _ := eng.MaintenanceOwner(ctx, engine.Repo{ID: repo.ID, Config: got.Config.ForAgent(""), Password: repo.Password}); owner != eng.UsernameAtHost() {
 		t.Fatalf("owner = %q, want the server", owner)
 	}
 
@@ -100,7 +100,7 @@ func TestServerMaintainsRepository(t *testing.T) {
 	if c.MaintainedBy(ctx, repo.ID) != MaintByAgent {
 		t.Fatal("not handed back")
 	}
-	if owner, _ := eng.MaintenanceOwner(ctx, engine.Repo{ID: repo.ID, Config: got.Config.ForAgent(), Password: repo.Password}); owner != engine.OwnerOf(job.AgentID) {
+	if owner, _ := eng.MaintenanceOwner(ctx, engine.Repo{ID: repo.ID, Config: got.Config.ForAgent(""), Password: repo.Password}); owner != engine.OwnerOf(job.AgentID) {
 		t.Fatalf("owner = %q, want the agent", owner)
 	}
 	if _, err := c.SetMaintainer(ctx, repo.ID, MaintByAgent, "nobody", ""); err == nil {

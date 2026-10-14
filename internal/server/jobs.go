@@ -115,7 +115,7 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	}
 
 	resp, err := withAgent(c, agent, initTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.InitRepositoryResponse, error) {
-		return cl.InitRepository(ctx, &agentpb.InitRepositoryRequest{Repository: toProtoRepo(r)})
+		return cl.InitRepository(ctx, &agentpb.InitRepositoryRequest{Repository: toProtoRepo(r, agent.ID)})
 	})
 	if err != nil {
 		if derr := c.Catalog.DeleteRepository(ctx, id); derr != nil {
@@ -129,6 +129,9 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	r.InitializedAt = time.Now()
 	if err := c.Catalog.MarkRepositoryInitialized(ctx, id, r.Config, r.InitializedAt); err != nil {
 		return catalog.Repository{}, "", err
+	}
+	if err := c.Catalog.AssignAgent(ctx, id, agent.ID); err != nil {
+		return r, generated, err
 	}
 	return r, generated, nil
 }
@@ -218,6 +221,9 @@ func (c *Controller) AddJob(ctx context.Context, in JobInput) (catalog.Job, erro
 	}
 	if repo.InitializedAt.IsZero() {
 		return catalog.Job{}, ErrNotInitialized
+	}
+	if err := c.checkAssigned(ctx, repo.ID, j.AgentID); err != nil {
+		return catalog.Job{}, err
 	}
 	if err := validateJobBody(in, &j); err != nil {
 		return catalog.Job{}, err
@@ -312,7 +318,7 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 	}
 
 	req := &agentpb.BackupRequest{
-		Repository: toProtoRepo(repo),
+		Repository: toProtoRepo(repo, agent.ID),
 		Paths:      job.Paths,
 		Excludes:   job.Excludes,
 		Retention: &agentpb.Retention{
@@ -429,7 +435,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 	}
 	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
 		return cl.Check(ctx, &agentpb.CheckRequest{
-			Repository:          toProtoRepo(repo),
+			Repository:          toProtoRepo(repo, agent.ID),
 			VerifyPercent:       checkVerifyPercent,
 			TestRestoreMaxBytes: checkTestRestoreMaxBytes,
 		})
@@ -483,7 +489,7 @@ func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) ([]S
 		paths = []string{"/vms/" + job.VM.Name}
 	}
 	resp, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListSnapshotsResponse, error) {
-		return cl.ListSnapshots(ctx, &agentpb.ListSnapshotsRequest{Repository: toProtoRepo(repo), Paths: paths})
+		return cl.ListSnapshots(ctx, &agentpb.ListSnapshotsRequest{Repository: toProtoRepo(repo, agent.ID), Paths: paths})
 	})
 	if err != nil {
 		return nil, err
@@ -519,7 +525,7 @@ func (c *Controller) Browse(ctx context.Context, jobID, onID, snapshotID, path s
 			entries, err := c.Engine.ListDirectory(ctx, er, snapshotID, path)
 			return dirEntries(entries), err
 		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListDirectoryResponse, error) {
-			return cl.ListDirectory(ctx, &agentpb.ListDirectoryRequest{Repository: toProtoRepo(repo), SnapshotId: snapshotID, Path: path})
+			return cl.ListDirectory(ctx, &agentpb.ListDirectoryRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID, Path: path})
 		})
 		if err != nil {
 			return nil, err
@@ -555,7 +561,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 		return restoreResponse(st), err
 	}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 		return cl.Restore(ctx, &agentpb.RestoreRequest{
-			Repository: toProtoRepo(repo), SnapshotId: snapshotID, Path: path, Target: target, Overwrite: overwrite,
+			Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID, Path: path, Target: target, Overwrite: overwrite,
 		})
 	})
 	run.FinishedAt = time.Now()
@@ -638,8 +644,9 @@ func withAgent[T any](c *Controller, a catalog.Agent, timeout time.Duration, cal
 	return call(ctx, agentpb.NewAgentClient(conn))
 }
 
-func toProtoRepo(r catalog.Repository) *agentpb.Repository {
-	cfg, _ := json.Marshal(r.Config.ForAgent()) // a repocfg.Config always marshals
+// toProtoRepo is the repository as agent agentID is sent it.
+func toProtoRepo(r catalog.Repository, agentID string) *agentpb.Repository {
+	cfg, _ := json.Marshal(r.Config.ForAgent(agentID)) // a repocfg.Config always marshals
 	return &agentpb.Repository{Id: r.ID, ConfigJson: cfg, Password: r.Password}
 }
 

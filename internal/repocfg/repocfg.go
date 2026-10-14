@@ -35,8 +35,12 @@ type SFTP struct {
 	User string `json:"user"`
 	Path string `json:"path"`
 	// KeyFile is a private key path on the agent host.
-	KeyFile  string `json:"key_file,omitempty"`
-	Password string `json:"password,omitempty"`
+	KeyFile string `json:"key_file,omitempty"`
+	// KeyFiles overrides KeyFile for individual agents (agent ID -> path), so
+	// agents sharing a repository can each use their own key. Agents only ever
+	// receive the one path that applies to them (see ForAgent).
+	KeyFiles map[string]string `json:"key_files,omitempty"`
+	Password string            `json:"password,omitempty"`
 	// KnownHosts is known_hosts content. Empty at creation means trust on
 	// first use: the agent records the host key it sees.
 	KnownHosts string `json:"known_hosts,omitempty"`
@@ -71,7 +75,7 @@ func (c Config) Validate() error {
 		if s.Port <= 0 || s.Port > 65535 {
 			return fmt.Errorf("sftp port %d is invalid", s.Port)
 		}
-		if s.KeyFile == "" && s.Password == "" {
+		if s.KeyFile == "" && s.Password == "" && len(s.KeyFiles) == 0 {
 			return errors.New("sftp needs a key file or a password")
 		}
 	case KindS3:
@@ -124,12 +128,22 @@ func (c Config) Location() string {
 	return c.Kind
 }
 
-// ForAgent is the config as agents see it: without the server-only path.
-func (c Config) ForAgent() Config {
+// ForAgent is the config as the given agent sees it: without the server-only
+// path, and with the SFTP key path that applies to that agent (its entry in
+// KeyFiles, else the default). An empty agentID gives the default for all.
+func (c Config) ForAgent(agentID string) Config {
 	if c.Filesystem != nil && c.Filesystem.ServerPath != "" {
 		f := *c.Filesystem
 		f.ServerPath = ""
 		c.Filesystem = &f
+	}
+	if c.SFTP != nil && len(c.SFTP.KeyFiles) > 0 {
+		s := *c.SFTP
+		if k := s.KeyFiles[agentID]; k != "" {
+			s.KeyFile = k
+		}
+		s.KeyFiles = nil
+		c.SFTP = &s
 	}
 	return c
 }
@@ -149,9 +163,10 @@ func (c Config) ForServer() (Config, error) {
 }
 
 // Fingerprint changes whenever the storage settings change, so agents can
-// drop a stale local connection. It ignores the server-only path.
+// drop a stale local connection. It ignores the server-only path and the
+// per-agent key table (an agent fingerprints the config it was sent).
 func (c Config) Fingerprint() string {
-	b, _ := json.Marshal(c.ForAgent())
+	b, _ := json.Marshal(c.ForAgent(""))
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:6])
 }

@@ -250,10 +250,40 @@ kind:
 | SFTP with a key file | The key file at the **same path** as in the repository (e.g. `/keys/sftp_key`), and its public key authorized on the SFTP server. See [SFTP key naming](agent.md#sftp-key-naming). |
 | Filesystem | The same directory reachable from that agent (a shared mount). |
 
-This is what makes a restore on a different agent work (below). Each agent
-should still back up to its own repository: several agents writing to one
-repository is untested, and a Storage Box limits the number of simultaneous
-connections.
+This is what makes a restore on a different agent work (below). To back up
+from several agents **into** one repository, see
+[Sharing a repository between agents](#sharing-a-repository-between-agents).
+
+#### Sharing a repository between agents
+
+Kopia is built for several clients writing to one repository, and the identity
+of each snapshot stays per agent (`voidgrid-backup@<agent ID>`), so agents'
+histories and retention never touch each other.
+
+- **Assign** an agent on the Repositories page (**Assign an agent...** on the
+  row). The agent first opens the repository, never creating anything, and is
+  assigned only if that works; the same form re-tests an assigned agent. A job
+  can only be created for an agent assigned to its repository. Existing
+  installs were migrated so every agent that already had a job is assigned.
+- **Keys.** An SFTP repository stores a default key file path; give an agent
+  its own with **Key file on that agent**, and authorize each agent's public
+  key for the same SFTP user (one `authorized_keys` line per agent, see
+  [SFTP key naming](agent.md#sftp-key-naming)). The key is tested when you
+  assign. Agents only ever receive their own path.
+- **Unassign** is refused while the agent has jobs on the repository.
+- **Maintenance**: let the server maintain a repository that several agents
+  share ([above](#letting-the-server-maintain-a-repository)); an agent owner
+  that is replaced would otherwise stall it. The Repositories page says so for
+  a shared repository that an agent still maintains.
+- **Default location.** A new repository's SFTP path and S3 prefix start as
+  `<agent-id>-backup`, so unrelated data never shares a directory. It is a
+  default, not enforced.
+- A Storage Box limits simultaneous connections (about 10). Jobs on several
+  agents share them, so stagger their schedules (the Jobs page warns about
+  overlaps).
+- Several agents writing to one repository has only been tested between
+  in-process agents on a local filesystem repository, not against a real
+  Storage Box or S3.
 
 #### Maintenance
 

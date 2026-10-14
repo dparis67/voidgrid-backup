@@ -100,7 +100,7 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, 
 			st, err := c.Engine.RestoreStack(ctx, er, nil, snapshotID, targetRoot, stopStack)
 			return restoreResponse(st), err
 		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
-			return cl.RestoreStack(ctx, &agentpb.RestoreStackRequest{Repository: toProtoRepo(repo),
+			return cl.RestoreStack(ctx, &agentpb.RestoreStackRequest{Repository: toProtoRepo(repo, agent.ID),
 				SnapshotId: snapshotID, TargetRoot: targetRoot, StopStack: stopStack})
 		})
 		if err != nil {
@@ -119,7 +119,7 @@ func (c *Controller) ImportDump(ctx context.Context, jobID, snapshotID, service 
 	return c.stackOp(ctx, jobID, "", false, "import", func(repo catalog.Repository, agent catalog.Agent, job catalog.Job, run *catalog.Run) error {
 		run.Summary = fmt.Sprintf("import %s dump from %s", service, shortID(snapshotID))
 		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ImportDumpResponse, error) {
-			return cl.ImportDump(ctx, &agentpb.ImportDumpRequest{Repository: toProtoRepo(repo), SnapshotId: snapshotID, Service: service})
+			return cl.ImportDump(ctx, &agentpb.ImportDumpRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID, Service: service})
 		})
 		if err != nil {
 			return err

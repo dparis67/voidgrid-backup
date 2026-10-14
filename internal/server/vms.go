@@ -62,7 +62,7 @@ func (c *Controller) RestoreVM(ctx context.Context, jobID, onID, snapshotID, tar
 			st, err := c.Engine.RestoreVM(ctx, er, nil, snapshotID, targetDir, define)
 			return restoreResponse(st), err
 		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
-			return cl.RestoreVM(ctx, &agentpb.RestoreVMRequest{Repository: toProtoRepo(repo),
+			return cl.RestoreVM(ctx, &agentpb.RestoreVMRequest{Repository: toProtoRepo(repo, agent.ID),
 				SnapshotId: snapshotID, TargetDir: targetDir, Define: define})
 		})
 		if err != nil {

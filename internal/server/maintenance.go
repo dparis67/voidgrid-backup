@@ -111,7 +111,7 @@ func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository
 	for range 3 {
 		tried[agent.ID] = true
 		resp, err := withAgent(c, agent, maintTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.MaintainResponse, error) {
-			return cl.Maintain(ctx, &agentpb.MaintainRequest{Repository: toProtoRepo(repo)})
+			return cl.Maintain(ctx, &agentpb.MaintainRequest{Repository: toProtoRepo(repo, agent.ID)})
 		})
 		if err != nil {
 			return agent.ID, fmt.Errorf("on %s: %w", agent.Name, err)

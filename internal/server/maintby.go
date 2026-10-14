@@ -111,7 +111,7 @@ func (c *Controller) SetMaintainer(ctx context.Context, repoID, who, agentID, se
 			return nil, fmt.Errorf("agent: %w", err)
 		}
 		if _, err := withAgent(c, agent, initTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.TakeMaintenanceResponse, error) {
-			return cl.TakeMaintenance(ctx, &agentpb.TakeMaintenanceRequest{Repository: toProtoRepo(repo)})
+			return cl.TakeMaintenance(ctx, &agentpb.TakeMaintenanceRequest{Repository: toProtoRepo(repo, agent.ID)})
 		}); err != nil {
 			return nil, fmt.Errorf("on %s: %w", agent.Name, unimplementedHint(err))
 		}
@@ -196,7 +196,7 @@ func (c *Controller) sameRepositoryAsAgent(ctx context.Context, repo catalog.Rep
 	var problems []string
 	for _, a := range candidates {
 		resp, err := withAgent(c, a, initTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.TestRepositoryResponse, error) {
-			return cl.TestRepository(ctx, &agentpb.TestRepositoryRequest{Repository: toProtoRepo(repo)})
+			return cl.TestRepository(ctx, &agentpb.TestRepositoryRequest{Repository: toProtoRepo(repo, a.ID)})
 		})
 		switch {
 		case err != nil:

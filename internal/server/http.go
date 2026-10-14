@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +67,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
+	mux.HandleFunc("POST /repositories/{id}/agents", u.assignAgent)
+	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/remove", u.unassignAgent)
 	mux.HandleFunc("POST /repositories/{id}/remove", u.removeRepository)
 	mux.HandleFunc("POST /repositories/{id}/wipe", u.wipeRepository)
 	mux.HandleFunc("GET /notifications", u.notifications)
@@ -261,6 +264,14 @@ type repoRow struct {
 	Maintaining bool   // a maintenance cycle is running now
 	WipeError   string // why the last wipe failed
 	MaintBy     string // "server" or "agent": who runs maintenance
+	Assigned    []assignedAgent
+	Unassigned  []catalog.Agent // agents that could still be assigned
+}
+
+// assignedAgent is an agent that may use a repository.
+type assignedAgent struct {
+	catalog.Agent
+	Jobs int // its jobs on the repository; the assignment can't be removed while any
 }
 
 type repositoriesPage struct {
@@ -289,6 +300,11 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	agents, err := u.c.Catalog.ListAgents(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	for _, rp := range repos {
 		row := repoRow{Repository: rp, Location: rp.Config.Location()}
 		if st, ok, _ := u.c.RepoStats(ctx, rp.ID); ok {
@@ -308,9 +324,19 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		if row.Maintaining = u.c.IsRunning(repoMaintRunKey(rp.ID)); row.Maintaining {
 			p.Measuring = true
 		}
+		perAgent := map[string]int{}
 		for _, j := range jobs {
 			if j.RepositoryID == rp.ID {
 				row.Jobs++
+				perAgent[j.AgentID]++
+			}
+		}
+		ids, _ := u.c.Catalog.RepositoryAgents(ctx, rp.ID)
+		for _, a := range agents {
+			if slices.Contains(ids, a.ID) {
+				row.Assigned = append(row.Assigned, assignedAgent{Agent: a, Jobs: perAgent[a.ID]})
+			} else {
+				row.Unassigned = append(row.Unassigned, a)
 			}
 		}
 		p.Repos = append(p.Repos, row)
