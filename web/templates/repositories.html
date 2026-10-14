@@ -22,7 +22,8 @@
         <tr>
           <td>{{.Name}}</td>
           <td>{{.Config.Kind}}</td>
-          <td class="mono">{{.Location}}</td>
+          <td class="mono">{{.Location}}{{if .Config.Filesystem}}
+            <div class="hint">Local path on the agent.{{if .Config.Filesystem.ServerPath}} The server sees it at <span class="mono">{{.Config.Filesystem.ServerPath}}</span>.{{else}} The server can maintain it only if the same directory is mounted in the server container (set below).{{end}}</div>{{end}}</td>
           <td>{{if .Config.ECC}}<span class="ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
           <td class="num">{{.Jobs}}</td>
           <td>
@@ -36,9 +37,22 @@
               {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
               {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
             {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
+            <div class="muted">maintained by {{.MaintBy}}</div>
             {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" style="display:inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}
           </td>
           <td>
+            {{if and (not .InitializedAt.IsZero) (not .Wiping)}}
+            <details>
+              <summary>Maintainer…</summary>
+              <form method="post" action="/repositories/{{.ID}}/maintainer">
+                <p class="hint">Who runs maintenance (compaction and cleanup). The default is the agent that owns the repository; the server can take over, which keeps working when agents are replaced. It must be able to open the repository itself, with nothing running on it.</p>
+                <select name="who"><option value="server" {{if eq .MaintBy "agent"}}selected{{end}}>server</option><option value="agent" {{if eq .MaintBy "server"}}selected{{end}}>an agent</option></select>
+                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select> <span class="muted">(agent, when handing back)</span>
+                {{if .Config.Filesystem}}<label>Path on the server (optional) <input class="mono" name="server_path" value="{{.Config.Filesystem.ServerPath}}" placeholder="/mnt/backup/homelab"></label>{{end}}
+                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Change</button>
+              </form>
+            </details>
+            {{end}}
             {{if .Wiping}}<span class="running">wiping…</span>{{else}}
             {{if .WipeError}}<div class="err">{{.WipeError}}</div>{{end}}
             <details>
@@ -111,6 +125,8 @@
       <fieldset>
         <legend>Filesystem</legend>
         <label class="wide">Directory on the agent host <input name="fs_path" value="{{.Form.Get "fs_path"}}" placeholder="/mnt/backup/homelab"></label>
+        <label class="wide">Path on the server (optional) <input name="fs_server_path" value="{{.Form.Get "fs_server_path"}}" placeholder="/mnt/backup/homelab"></label>
+        <p class="hint wide">A local path lives on the agent host; the server cannot see it. If the same directory is mounted in the server container, give that path here so the server can run maintenance. Leave it blank otherwise.</p>
       </fieldset>
 
       <div class="actions"><button type="submit">Create repository</button></div>

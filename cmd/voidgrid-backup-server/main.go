@@ -20,6 +20,7 @@ import (
 	_ "time/tzdata" // TZ works in the distroless image, which has no zoneinfo
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/envflag"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
@@ -139,7 +140,11 @@ func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.C
 	if err != nil {
 		return fmt.Errorf("session key: %w", err)
 	}
-	ctrl := &server.Controller{Catalog: cat, CA: ca, ClientCert: clientCert, RegistryCert: registryCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
+	eng, err := engine.New(filepath.Join(data, "kopia"), server.EngineHost)
+	if err != nil {
+		return fmt.Errorf("repository engine: %w", err)
+	}
+	ctrl := &server.Controller{Engine: eng, Catalog: cat, CA: ca, ClientCert: clientCert, RegistryCert: registryCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

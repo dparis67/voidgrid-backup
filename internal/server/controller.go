@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -37,6 +38,9 @@ type Controller struct {
 	// LogBuf holds the server's own recent log lines for the Logs page; nil
 	// turns capture off.
 	LogBuf *logbuf.Buffer
+	// Engine lets the server open repositories itself, for the ones it
+	// maintains (see maintby.go). Nil means the server maintains nothing.
+	Engine *engine.Engine
 	// SessionKey signs session cookies; set once at startup
 	// (webauth.LoadOrCreateSessionKey) and never changed after.
 	SessionKey []byte

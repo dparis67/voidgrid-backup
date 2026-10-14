@@ -100,6 +100,9 @@ func (c *Controller) MaintainRepository(ctx context.Context, repoID string) (Rep
 }
 
 func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository) (string, error) {
+	if c.MaintainedBy(ctx, repo.ID) == MaintByServer {
+		return c.runServerMaintenance(ctx, repo)
+	}
 	agent, err := c.agentForRepo(ctx, repo.ID)
 	if err != nil {
 		return "", err

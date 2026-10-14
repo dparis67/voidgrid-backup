@@ -4,7 +4,7 @@
   <div class="card">
     {{if .Jobs}}
     <table>
-      <thead><tr><th>Name</th><th>Agent</th><th>Repository</th><th>Paths</th><th>Schedule</th><th>Last backup</th><th>Next</th><th></th></tr></thead>
+      <thead><tr>{{range sortHeads .Sort .Desc}}<th><a class="sort" href="{{.Href}}">{{.Label}}{{.Mark}}</a></th>{{end}}<th></th></tr></thead>
       <tbody>
       {{range .Jobs}}
         <tr>
@@ -12,10 +12,14 @@
           <td>{{.Agent}}</td>
           <td>{{.Repo}}</td>
           <td class="mono">{{if .Stack}}stack {{.Stack.Project}}{{else if .VM}}VM {{.VM.Name}}{{else}}{{join .Paths ", "}}{{end}}</td>
-          <td class="mono">{{if .Schedule}}{{.Schedule}}{{if not .Enabled}} <span class="muted">(off)</span>{{end}}{{else}}<span class="muted">manual</span>{{end}}</td>
+          <td>
+            <form class="inline" method="post" action="/jobs/{{.ID}}/schedule"><input type="hidden" name="from" value="list">{{if $.Sort}}<input type="hidden" name="sort" value="{{$.Sort}}"><input type="hidden" name="dir" value="{{if $.Desc}}desc{{else}}asc{{end}}">{{end}}<input class="mono sched" name="schedule" value="{{.Schedule}}" placeholder="manual" aria-label="Schedule for {{.Name}}" autocomplete="off"> <button class="plain" type="submit">Save</button>{{if and .Schedule (not .Enabled)}} <span class="muted">(off)</span>{{end}}</form>
+            {{if .Clashes}}<div class="warn" title="Runs at the same time as: {{join .Clashes ", "}}">⚠ overlaps {{index .Clashes 0}}{{if gt (len .Clashes) 1}} +{{sub1 (len .Clashes)}} more{{end}}</div>{{end}}
+          </td>
           <td>{{if .Running}}<span class="running">running</span>{{else if .Last}}<span class="{{.Last.Status}}">{{.Last.Status}}</span> {{ago .Last.StartedAt}}{{else}}<span class="muted">never</span>{{end}}</td>
+          <td class="mono">{{if .Running}}<span class="muted">-</span>{{else if .Last}}{{took .Last.StartedAt .Last.FinishedAt}}{{else}}<span class="muted">-</span>{{end}}</td>
           <td>{{if .Next.IsZero}}-{{else}}{{when .Next}}{{end}}</td>
-          <td><form method="post" action="/jobs/{{.ID}}/run"><button class="plain" type="submit" {{if .Running}}disabled{{end}}>Run</button></form></td>
+          <td><form method="post" action="/jobs/{{.ID}}/run"><input type="hidden" name="from" value="list">{{if $.Sort}}<input type="hidden" name="sort" value="{{$.Sort}}"><input type="hidden" name="dir" value="{{if $.Desc}}desc{{else}}asc{{end}}">{{end}}<button class="plain" type="submit" {{if .Running}}disabled{{end}}>Run</button></form></td>
         </tr>
       {{end}}
       </tbody>

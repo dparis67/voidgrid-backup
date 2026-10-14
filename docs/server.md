@@ -276,6 +276,40 @@ Running maintenance does **not** free space at once. Kopia keeps deleted data
 for at least 24 hours and needs two garbage-collection cycles, so space from
 deleted snapshots comes back after about two days of daily runs.
 
+#### Letting the server maintain a repository
+
+By default the agent that owns a repository runs its maintenance. Because the
+owner is an agent, replacing or re-registering that host leaves the repository
+without a maintainer. A repository can instead be maintained by the server,
+whose identity (`voidgrid-backup@voidgrid-server`) does not change:
+
+- Repositories page, **Maintainer...** on the row: pick "server", type the
+  repository name, press Change. The server first opens the repository itself
+  (it never creates anything), then makes itself the Kopia maintenance owner.
+  Nothing else changes; backups still run on the agents.
+- It is refused while a job on the repository, a maintenance run or a wipe is
+  running. Kopia has no repository-wide maintenance lock, so the owner is only
+  changed while nothing is running.
+- The server needs to reach the storage itself. S3 and SFTP with a password
+  work as they are. SFTP with a key file needs that key at the same path inside
+  the **server** container; the test in the previous step tells you whether
+  it works.
+- A **filesystem** repository is a directory on an agent host. Give its path
+  as the server sees it (**Path on the server**, optional) if the same
+  directory is mounted in the server container; leave it blank and the
+  repository stays maintained by its agent. Use the same share, mounted the
+  same way, on both: NFS and SMB caching can show one side stale data for a
+  moment. The agents never receive this path. Before switching, an agent that
+  uses the repository opens it at its own path and must report the same
+  repository ID as the server read through the mapped path; if the IDs differ,
+  or no agent can answer (offline, or older than the server), nothing changes.
+- The server's clock must be right: Kopia refuses to run maintenance when the
+  server's time and the repository's differ too much.
+- Choosing "an agent" has that agent open the repository and make itself the
+  owner. The server does not need to reach the repository for this, so it works
+  even when the server has lost access. An agent older than the server answers
+  that it needs updating.
+
 #### Removing backups
 
 - **Delete a snapshot**: on the job page, type its short ID in the box on its
@@ -359,6 +393,29 @@ server, so the page opens even when the job's agent is down.
   directory for the target ([Paths and read-only mounts](agent.md#paths-and-read-only-mounts)).
 - The run is recorded under the original job, and its summary names the agent
   it ran on.
+
+#### Restoring on the server
+
+When the job's agent is broken or gone and no other agent suits, the same
+picker offers **The server**. The server then reads the repository itself and
+writes the restored files into a directory **inside its own container**, so
+mount a volume at the path you restore to, or the files vanish with the
+container. It needs no agent, Docker or libvirt.
+
+- It is offered only when the server can open the repository: S3, SFTP with
+  the key mounted in the server container (see
+  [Letting the server maintain a repository](#letting-the-server-maintain-a-repository)),
+  or a filesystem repository with a **Path on the server**. Otherwise the
+  option is greyed out and its tooltip says why.
+- Like any other restore on a different host it always goes into a target
+  directory; in-place restores stay on the job's own agent.
+- Files are owned by the user the server runs as, and ownership and special
+  permissions that need root are not restored unless it runs as root.
+- To restore only part of a stack or VM snapshot (say one data folder), browse
+  into it and use **Restore as files** on that folder; the "Restore stack"
+  form restores the whole snapshot.
+- If the server itself is gone too, use
+  [voidgrid-backup-recover](recovery.md).
 
 ### Notifications
 

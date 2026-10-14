@@ -15,6 +15,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/notify"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -273,6 +274,26 @@ func (c *Controller) UpdateJob(ctx context.Context, id string, in JobInput) (cat
 	return j, c.Catalog.UpdateJob(ctx, j)
 }
 
+// SetSchedule changes a job's cron schedule and nothing else; blank means
+// manual runs only.
+func (c *Controller) SetSchedule(ctx context.Context, id, schedule string) error {
+	if !c.inflight.start(id) {
+		return ErrRunning
+	}
+	defer c.inflight.done(id)
+	j, err := c.Catalog.Job(ctx, id)
+	if err != nil {
+		return err
+	}
+	j.Schedule = strings.TrimSpace(schedule)
+	if j.Schedule != "" {
+		if _, err := cron.ParseStandard(j.Schedule); err != nil {
+			return fmt.Errorf("invalid schedule: %w", err)
+		}
+	}
+	return c.Catalog.UpdateJob(ctx, j)
+}
+
 // RunJob backs up a job now and records the run. It blocks until the backup
 // finishes; callers that must not block run it in a goroutine.
 func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog.Run, error) {
@@ -494,7 +515,10 @@ func (c *Controller) Browse(ctx context.Context, jobID, onID, snapshotID, path s
 			return nil, err
 		}
 		defer release()
-		resp, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListDirectoryResponse, error) {
+		resp, err := runOn(c, agent, repo, browseTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.ListDirectoryResponse, error) {
+			entries, err := c.Engine.ListDirectory(ctx, er, snapshotID, path)
+			return dirEntries(entries), err
+		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListDirectoryResponse, error) {
 			return cl.ListDirectory(ctx, &agentpb.ListDirectoryRequest{Repository: toProtoRepo(repo), SnapshotId: snapshotID, Path: path})
 		})
 		if err != nil {
@@ -526,7 +550,10 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 	if run.ID, err = c.Catalog.StartRun(ctx, jobID, run.Kind, run.Trigger, run.StartedAt); err != nil {
 		return catalog.Run{}, err
 	}
-	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
+	resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+		st, err := c.Engine.Restore(ctx, er, snapshotID, path, target, overwrite)
+		return restoreResponse(st), err
+	}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 		return cl.Restore(ctx, &agentpb.RestoreRequest{
 			Repository: toProtoRepo(repo), SnapshotId: snapshotID, Path: path, Target: target, Overwrite: overwrite,
 		})
@@ -559,6 +586,9 @@ var ErrNeedsTarget = errors.New("a restore on another agent needs a target direc
 func (c *Controller) hostFor(ctx context.Context, own catalog.Agent, onID string) (catalog.Agent, error) {
 	if onID == "" || onID == own.ID {
 		return own, nil
+	}
+	if onID == ServerHost {
+		return serverAsAgent, nil
 	}
 	a, err := c.Catalog.Agent(ctx, onID)
 	if err != nil {
@@ -609,7 +639,7 @@ func withAgent[T any](c *Controller, a catalog.Agent, timeout time.Duration, cal
 }
 
 func toProtoRepo(r catalog.Repository) *agentpb.Repository {
-	cfg, _ := json.Marshal(r.Config) // a repocfg.Config always marshals
+	cfg, _ := json.Marshal(r.Config.ForAgent()) // a repocfg.Config always marshals
 	return &agentpb.Repository{Id: r.ID, ConfigJson: cfg, Password: r.Password}
 }
 

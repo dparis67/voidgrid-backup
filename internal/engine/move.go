@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,8 +15,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kopia/kopia/repo"
 	"github.com/kopia/kopia/repo/blob"
 	"github.com/kopia/kopia/repo/format"
+	"github.com/kopia/kopia/repo/maintenance"
 	pkgsftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -27,11 +30,26 @@ import (
 // password. It never creates anything at the location. The warnings are
 // findings that do not make the repository unusable.
 func (e *Engine) TestRepository(ctx context.Context, r Repo) (warnings []string, err error) {
+	info, err := e.Inspect(ctx, r)
+	return info.Warnings, err
+}
+
+// RepoInfo is what Inspect learns about a repository.
+type RepoInfo struct {
+	ID       string // Kopia's unique repository ID, hex
+	Owner    string // maintenance owner (user@host), "" if none
+	Warnings []string
+}
+
+// Inspect does what TestRepository does and also returns the repository's
+// identity and maintenance owner. It never creates anything at the location.
+func (e *Engine) Inspect(ctx context.Context, r Repo) (RepoInfo, error) {
+	var info RepoInfo
 	if err := r.Config.Validate(); err != nil {
-		return nil, err
+		return info, err
 	}
 	if err := noRepositoryAt(ctx, r.Config); err != nil {
-		return nil, err
+		return info, err
 	}
 	dir := filepath.Join(e.dir, r.ID+"-"+r.Config.Fingerprint())
 	_, statErr := os.Stat(dir)
@@ -44,17 +62,23 @@ func (e *Engine) TestRepository(ctx context.Context, r Repo) (warnings []string,
 		if _, cfgErr := os.Stat(filepath.Join(dir, "repository.config")); fresh && errors.Is(cfgErr, fs.ErrNotExist) {
 			_ = os.RemoveAll(dir)
 		}
-		return nil, err
+		return info, err
+	}
+	if dr, ok := rep.(repo.DirectRepository); ok {
+		info.ID = hex.EncodeToString(dr.UniqueID())
+	}
+	if p, err := maintenance.GetParams(ctx, rep); err == nil {
+		info.Owner = p.Owner
 	}
 	if err := rep.Close(ctx); err != nil {
-		return nil, fmt.Errorf("close repository: %w", err)
+		return info, fmt.Errorf("close repository: %w", err)
 	}
 	if fsc := r.Config.Filesystem; fsc != nil {
 		if w := mountWarning(fsc.Path); w != "" {
-			warnings = append(warnings, w)
+			info.Warnings = append(info.Warnings, w)
 		}
 	}
-	return warnings, nil
+	return info, nil
 }
 
 // networkFS are the filesystem types treated as a network mount: SMB/CIFS

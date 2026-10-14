@@ -31,15 +31,18 @@ func NewHandler(c *Controller) http.Handler {
 		panic("server: NewHandler requires Controller.Auth (see Controller.ReloadAuth); signing in is not optional")
 	}
 	u := &ui{c: c, tmpl: template.Must(template.New("").Funcs(template.FuncMap{
-		"ago":      ago,
-		"when":     func(t time.Time) string { return whenStr(t) },
-		"bytes":    HumanBytes,
-		"short":    shortID,
-		"join":     strings.Join,
-		"child":    func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
-		"q":        url.QueryEscape,
-		"unixTime": func(s int64) time.Time { return time.Unix(s, 0) },
-		"list":     func(s ...string) []string { return s },
+		"ago":       ago,
+		"took":      took,
+		"sub1":      func(n int) int { return n - 1 },
+		"sortHeads": sortHeads,
+		"when":      func(t time.Time) string { return whenStr(t) },
+		"bytes":     HumanBytes,
+		"short":     shortID,
+		"join":      strings.Join,
+		"child":     func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
+		"q":         url.QueryEscape,
+		"unixTime":  func(s int64) time.Time { return time.Unix(s, 0) },
+		"list":      func(s ...string) []string { return s },
 	}).ParseFS(web.FS, "templates/*.html"))}
 
 	mux := http.NewServeMux()
@@ -62,6 +65,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
+	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
 	mux.HandleFunc("POST /repositories/{id}/remove", u.removeRepository)
 	mux.HandleFunc("POST /repositories/{id}/wipe", u.wipeRepository)
 	mux.HandleFunc("GET /notifications", u.notifications)
@@ -72,6 +76,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /jobs", u.addJob)
 	mux.HandleFunc("GET /jobs/{id}", u.job)
 	mux.HandleFunc("POST /jobs/{id}/run", u.runJob)
+	mux.HandleFunc("POST /jobs/{id}/schedule", u.setSchedule)
 	mux.HandleFunc("POST /jobs/{id}/check", u.checkJob)
 	mux.HandleFunc("POST /jobs/{id}/toggle", u.toggleJob)
 	mux.HandleFunc("POST /jobs/{id}/delete", u.deleteJob)
@@ -255,6 +260,7 @@ type repoRow struct {
 	Maint       *RepoMaintenance
 	Maintaining bool   // a maintenance cycle is running now
 	WipeError   string // why the last wipe failed
+	MaintBy     string // "server" or "agent": who runs maintenance
 }
 
 type repositoriesPage struct {
@@ -295,6 +301,7 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 			p.Measuring = true
 		}
 		row.WipeError = u.c.WipeError(ctx, rp.ID)
+		row.MaintBy = u.c.MaintainedBy(ctx, rp.ID)
 		if m, ok := u.c.RepoMaintenance(ctx, rp.ID); ok {
 			row.Maint = &m
 		}
@@ -403,7 +410,7 @@ func repoConfigFromForm(f url.Values) (repocfg.Config, error) {
 			Insecure:        f.Get("s3_insecure") != "",
 		}
 	case repocfg.KindFilesystem:
-		cfg.Filesystem = &repocfg.Filesystem{Path: strings.TrimSpace(f.Get("fs_path"))}
+		cfg.Filesystem = &repocfg.Filesystem{Path: strings.TrimSpace(f.Get("fs_path")), ServerPath: strings.TrimSpace(f.Get("fs_server_path"))}
 	}
 	return cfg, cfg.Validate()
 }
@@ -416,6 +423,7 @@ type jobRow struct {
 	Last        *catalog.Run
 	Next        time.Time
 	Running     bool
+	Clashes     []string // other jobs it would run alongside in the next 24 h
 }
 
 type jobsPage struct {
@@ -424,6 +432,8 @@ type jobsPage struct {
 	Agents []catalog.Agent
 	Repos  []catalog.Repository
 	Form   url.Values
+	Sort   string // active sort column, "" for the stored order
+	Desc   bool
 }
 
 func (u *ui) jobs(w http.ResponseWriter, r *http.Request) {
@@ -446,6 +456,12 @@ func (u *ui) renderJobs(w http.ResponseWriter, r *http.Request, code int, p jobs
 	for _, j := range jobs {
 		p.Jobs = append(p.Jobs, u.jobRow(ctx, j, p.Agents, p.Repos))
 	}
+	clashes := findClashes(p.Jobs, time.Now())
+	for i := range p.Jobs {
+		p.Jobs[i].Clashes = clashes[p.Jobs[i].ID]
+	}
+	p.Sort = sortJobs(p.Jobs, r.URL.Query().Get("sort"), r.URL.Query().Get("dir") == "desc")
+	p.Desc = p.Sort != "" && r.URL.Query().Get("dir") == "desc"
 	if p.Form == nil {
 		k := catalog.DefaultRetention
 		p.Form = url.Values{
@@ -580,14 +596,45 @@ func (u *ui) refreshSnapshots(w http.ResponseWriter, r *http.Request) {
 	redirectNotice(w, r, "/jobs/"+id, "Refreshing the snapshot list from the repository.")
 }
 
+// listBack is where a button on the Jobs list returns to: the list in the sort
+// it was in (the list's forms send from=list, sort and dir), or fallback for a
+// post from anywhere else.
+func listBack(r *http.Request, fallback string) string {
+	if r.FormValue("from") != "list" {
+		return fallback
+	}
+	for _, c := range jobCols {
+		if c.key == r.FormValue("sort") {
+			return "/jobs?" + url.Values{"sort": {c.key}, "dir": {r.FormValue("dir")}}.Encode()
+		}
+	}
+	return "/jobs"
+}
+
+// setSchedule changes only the schedule of a job, from the Jobs list.
+func (u *ui) setSchedule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	back := listBack(r, "/jobs/"+id)
+	if err := u.c.SetSchedule(r.Context(), id, r.FormValue("schedule")); err != nil {
+		if errors.Is(err, catalog.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		redirectNotice(w, r, back, "Schedule not saved: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, back, "Schedule saved. It applies from the next scheduled start.")
+}
+
 func (u *ui) runJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if _, err := u.c.Catalog.Job(r.Context(), id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
+	back := listBack(r, "/jobs/"+id)
 	if u.c.IsRunning(id) {
-		redirectNotice(w, r, "/jobs/"+id, ErrRunning.Error())
+		redirectNotice(w, r, back, ErrRunning.Error())
 		return
 	}
 	go func() {
@@ -595,7 +642,7 @@ func (u *ui) runJob(w http.ResponseWriter, r *http.Request) {
 			slog.Error("manual backup", "job", id, "err", err)
 		}
 	}()
-	redirectNotice(w, r, "/jobs/"+id, "Backup started.")
+	redirectNotice(w, r, back, "Backup started.")
 }
 
 func (u *ui) checkJob(w http.ResponseWriter, r *http.Request) {
@@ -671,6 +718,7 @@ type browsePage struct {
 	Dumps      []string // stack snapshot root only: services with a dump
 	Agents     []catalog.Agent
 	On         string // agent ID the page browses and restores on; "" is the job's own
+	ServerWhy  string // why the server cannot be chosen under "Restore on"; "" when it can
 }
 
 func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
@@ -692,6 +740,11 @@ func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p.Agents, _ = u.c.Catalog.ListAgents(ctx)
+	if repo, err := u.c.Catalog.Repository(ctx, j.RepositoryID); err != nil {
+		p.ServerWhy = err.Error()
+	} else if err := u.c.ServerCanOpen(repo); err != nil {
+		p.ServerWhy = err.Error()
+	}
 	if on := r.URL.Query().Get("on"); on != j.AgentID {
 		p.On = on
 	}
@@ -802,6 +855,21 @@ func whenStr(t time.Time) string {
 		return "-"
 	}
 	return t.Local().Format("2006-01-02 15:04")
+}
+
+// took formats how long a run lasted, or "-" while it has no finish time.
+func took(start, end time.Time) string {
+	if start.IsZero() || end.IsZero() || end.Before(start) {
+		return "-"
+	}
+	d := end.Sub(start).Round(time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm %02ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
 func ago(t time.Time) string {

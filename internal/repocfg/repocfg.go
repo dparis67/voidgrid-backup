@@ -55,6 +55,10 @@ type S3 struct {
 // Filesystem is a directory on the agent host (local disk or a mount).
 type Filesystem struct {
 	Path string `json:"path"`
+	// ServerPath is optional: where the same directory is mounted in the
+	// server's container. Only the server uses it (so it can run maintenance);
+	// agents never see it and it is not part of Fingerprint.
+	ServerPath string `json:"server_path,omitempty"`
 }
 
 func (c Config) Validate() error {
@@ -78,6 +82,9 @@ func (c Config) Validate() error {
 	case KindFilesystem:
 		if c.Filesystem == nil || !path.IsAbs(c.Filesystem.Path) {
 			return errors.New("filesystem needs an absolute path")
+		}
+		if sp := c.Filesystem.ServerPath; sp != "" && !path.IsAbs(sp) {
+			return errors.New("the path on the server must be absolute")
 		}
 	default:
 		return fmt.Errorf("unknown repository kind %q", c.Kind)
@@ -117,10 +124,34 @@ func (c Config) Location() string {
 	return c.Kind
 }
 
+// ForAgent is the config as agents see it: without the server-only path.
+func (c Config) ForAgent() Config {
+	if c.Filesystem != nil && c.Filesystem.ServerPath != "" {
+		f := *c.Filesystem
+		f.ServerPath = ""
+		c.Filesystem = &f
+	}
+	return c
+}
+
+// ForServer is the config as the server opens it. A filesystem repository is
+// reached through its server path; without one the server cannot open it.
+func (c Config) ForServer() (Config, error) {
+	if c.Filesystem == nil {
+		return c, nil
+	}
+	if c.Filesystem.ServerPath == "" {
+		return c, errors.New("this directory is on an agent host; set its path on the server (where it is mounted in the server container) first")
+	}
+	f := Filesystem{Path: c.Filesystem.ServerPath}
+	c.Filesystem = &f
+	return c, nil
+}
+
 // Fingerprint changes whenever the storage settings change, so agents can
-// drop a stale local connection.
+// drop a stale local connection. It ignores the server-only path.
 func (c Config) Fingerprint() string {
-	b, _ := json.Marshal(c)
+	b, _ := json.Marshal(c.ForAgent())
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:6])
 }

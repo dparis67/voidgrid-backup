@@ -19,26 +19,27 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Agent_Ping_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Ping"
-	Agent_InitRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/InitRepository"
-	Agent_Backup_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Backup"
-	Agent_ListSnapshots_FullMethodName  = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
-	Agent_ListDirectory_FullMethodName  = "/voidgridbackup.agent.v1.Agent/ListDirectory"
-	Agent_Restore_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Restore"
-	Agent_ListStacks_FullMethodName     = "/voidgridbackup.agent.v1.Agent/ListStacks"
-	Agent_RestoreStack_FullMethodName   = "/voidgridbackup.agent.v1.Agent/RestoreStack"
-	Agent_ImportDump_FullMethodName     = "/voidgridbackup.agent.v1.Agent/ImportDump"
-	Agent_ListVMs_FullMethodName        = "/voidgridbackup.agent.v1.Agent/ListVMs"
-	Agent_RestoreVM_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RestoreVM"
-	Agent_Check_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Check"
-	Agent_DeleteSnapshot_FullMethodName = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
-	Agent_WipeRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/WipeRepository"
-	Agent_Maintain_FullMethodName       = "/voidgridbackup.agent.v1.Agent/Maintain"
-	Agent_TestRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/TestRepository"
-	Agent_MoveRepository_FullMethodName = "/voidgridbackup.agent.v1.Agent/MoveRepository"
-	Agent_PathUsage_FullMethodName      = "/voidgridbackup.agent.v1.Agent/PathUsage"
-	Agent_RepoStats_FullMethodName      = "/voidgridbackup.agent.v1.Agent/RepoStats"
-	Agent_Logs_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Logs"
+	Agent_Ping_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Ping"
+	Agent_InitRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/InitRepository"
+	Agent_Backup_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Backup"
+	Agent_ListSnapshots_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
+	Agent_ListDirectory_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListDirectory"
+	Agent_Restore_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Restore"
+	Agent_ListStacks_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ListStacks"
+	Agent_RestoreStack_FullMethodName    = "/voidgridbackup.agent.v1.Agent/RestoreStack"
+	Agent_ImportDump_FullMethodName      = "/voidgridbackup.agent.v1.Agent/ImportDump"
+	Agent_ListVMs_FullMethodName         = "/voidgridbackup.agent.v1.Agent/ListVMs"
+	Agent_RestoreVM_FullMethodName       = "/voidgridbackup.agent.v1.Agent/RestoreVM"
+	Agent_Check_FullMethodName           = "/voidgridbackup.agent.v1.Agent/Check"
+	Agent_DeleteSnapshot_FullMethodName  = "/voidgridbackup.agent.v1.Agent/DeleteSnapshot"
+	Agent_WipeRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/WipeRepository"
+	Agent_Maintain_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Maintain"
+	Agent_TestRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/TestRepository"
+	Agent_TakeMaintenance_FullMethodName = "/voidgridbackup.agent.v1.Agent/TakeMaintenance"
+	Agent_MoveRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/MoveRepository"
+	Agent_PathUsage_FullMethodName       = "/voidgridbackup.agent.v1.Agent/PathUsage"
+	Agent_RepoStats_FullMethodName       = "/voidgridbackup.agent.v1.Agent/RepoStats"
+	Agent_Logs_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Logs"
 )
 
 // AgentClient is the client API for Agent service.
@@ -83,6 +84,9 @@ type AgentClient interface {
 	// location in `repository` to the one in new_config_json (SFTP and
 	// filesystem only) and refuses if the destination exists.
 	TestRepository(ctx context.Context, in *TestRepositoryRequest, opts ...grpc.CallOption) (*TestRepositoryResponse, error)
+	// TakeMaintenance makes this agent the maintenance owner. The caller must
+	// make sure nothing is running on the repository.
+	TakeMaintenance(ctx context.Context, in *TakeMaintenanceRequest, opts ...grpc.CallOption) (*TakeMaintenanceResponse, error)
 	MoveRepository(ctx context.Context, in *MoveRepositoryRequest, opts ...grpc.CallOption) (*MoveRepositoryResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(ctx context.Context, in *PathUsageRequest, opts ...grpc.CallOption) (*PathUsageResponse, error)
@@ -261,6 +265,16 @@ func (c *agentClient) TestRepository(ctx context.Context, in *TestRepositoryRequ
 	return out, nil
 }
 
+func (c *agentClient) TakeMaintenance(ctx context.Context, in *TakeMaintenanceRequest, opts ...grpc.CallOption) (*TakeMaintenanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TakeMaintenanceResponse)
+	err := c.cc.Invoke(ctx, Agent_TakeMaintenance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentClient) MoveRepository(ctx context.Context, in *MoveRepositoryRequest, opts ...grpc.CallOption) (*MoveRepositoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MoveRepositoryResponse)
@@ -343,6 +357,9 @@ type AgentServer interface {
 	// location in `repository` to the one in new_config_json (SFTP and
 	// filesystem only) and refuses if the destination exists.
 	TestRepository(context.Context, *TestRepositoryRequest) (*TestRepositoryResponse, error)
+	// TakeMaintenance makes this agent the maintenance owner. The caller must
+	// make sure nothing is running on the repository.
+	TakeMaintenance(context.Context, *TakeMaintenanceRequest) (*TakeMaintenanceResponse, error)
 	MoveRepository(context.Context, *MoveRepositoryRequest) (*MoveRepositoryResponse, error)
 	// Host filesystem sizes, for choosing what to back up.
 	PathUsage(context.Context, *PathUsageRequest) (*PathUsageResponse, error)
@@ -408,6 +425,9 @@ func (UnimplementedAgentServer) Maintain(context.Context, *MaintainRequest) (*Ma
 }
 func (UnimplementedAgentServer) TestRepository(context.Context, *TestRepositoryRequest) (*TestRepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TestRepository not implemented")
+}
+func (UnimplementedAgentServer) TakeMaintenance(context.Context, *TakeMaintenanceRequest) (*TakeMaintenanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TakeMaintenance not implemented")
 }
 func (UnimplementedAgentServer) MoveRepository(context.Context, *MoveRepositoryRequest) (*MoveRepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveRepository not implemented")
@@ -730,6 +750,24 @@ func _Agent_TestRepository_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Agent_TakeMaintenance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TakeMaintenanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).TakeMaintenance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_TakeMaintenance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).TakeMaintenance(ctx, req.(*TakeMaintenanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Agent_MoveRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MoveRepositoryRequest)
 	if err := dec(in); err != nil {
@@ -872,6 +910,10 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TestRepository",
 			Handler:    _Agent_TestRepository_Handler,
+		},
+		{
+			MethodName: "TakeMaintenance",
+			Handler:    _Agent_TakeMaintenance_Handler,
 		},
 		{
 			MethodName: "MoveRepository",

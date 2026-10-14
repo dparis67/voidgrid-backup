@@ -154,6 +154,19 @@ func TestStackJobEndToEnd(t *testing.T) {
 		t.Fatalf("stack files on the other agent: %v", err)
 	}
 
+	// On the server: a directory restore needs no Docker, in place is refused.
+	mapRepoToServer(t, c, job.RepositoryID)
+	if _, err := c.RestoreStack(ctx, job.ID, ServerHost, snaps[0].ID, "", true); !errors.Is(err, ErrNeedsTarget) {
+		t.Fatalf("in-place stack restore on the server: %v", err)
+	}
+	onServer := filepath.Join(t.TempDir(), "onserver")
+	if rr, err := c.RestoreStack(ctx, job.ID, ServerHost, snaps[0].ID, onServer, false); err != nil || !restoreOK(rr) {
+		t.Fatalf("stack restore into a directory on the server: %+v %v", rr, err)
+	}
+	if _, err := os.Stat(filepath.Join(onServer, "stack", "docker-compose.yaml")); err != nil {
+		t.Fatalf("stack files on the server: %v", err)
+	}
+
 	ir, err := c.ImportDump(ctx, job.ID, snaps[0].ID, "db")
 	if err != nil || ir.Status != catalog.RunSuccess {
 		t.Fatalf("import: %+v %v", ir, err)

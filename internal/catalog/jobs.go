@@ -109,6 +109,15 @@ func (c *Catalog) MarkRepositoryInitialized(ctx context.Context, id string, cfg 
 	return c.update(ctx, `UPDATE repositories SET config = ?, initialized_at = ? WHERE id = ?`, string(b), formatTime(at), id)
 }
 
+// UpdateRepositoryConfig replaces the stored config and nothing else.
+func (c *Catalog) UpdateRepositoryConfig(ctx context.Context, id string, cfg repocfg.Config) error {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return c.update(ctx, `UPDATE repositories SET config = ? WHERE id = ?`, string(b), id)
+}
+
 // DeleteRepository removes a repository record that no job uses. The data
 // in storage is untouched.
 func (c *Catalog) DeleteRepository(ctx context.Context, id string) error {

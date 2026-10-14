@@ -5,16 +5,19 @@
   <p class="mono">
     <a href="{{$base}}{{if $on}}?on={{q $on}}{{end}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{q .Path}}{{if $on}}&on={{q $on}}{{end}}">{{.Name}}</a>{{end}}
   </p>
-  {{if gt (len .Agents) 1}}
+  {{if or (gt (len .Agents) 1) (not .ServerWhy)}}
   <form method="get" action="{{$base}}" class="grid">
     <input type="hidden" name="path" value="{{.Path}}">
     <label>Browse and restore on
       <select name="on" onchange="this.form.submit()">
         {{range .Agents}}<option value="{{.ID}}"{{if eq .ID (or $on $.Job.AgentID)}} selected{{end}}>{{.Name}}{{if eq .ID $.Job.AgentID}} (the job's agent){{end}}</option>{{end}}
+        <option value="server"{{if eq $on "server"}} selected{{end}}{{if .ServerWhy}} disabled title="{{.ServerWhy}}"{{end}}>The server{{if .ServerWhy}} (unavailable){{end}}</option>
       </select></label>
     <noscript><div class="actions"><button class="plain" type="submit">Use</button></div></noscript>
   </form>
-  {{if $on}}<p class="hint">Restores here need a target directory on that agent; in-place restores only run on the job's own agent.</p>{{end}}
+  {{if eq $on "server"}}<p class="hint">The server restores into a directory inside its own container: mount a volume there to keep the files. It needs no agent, Docker or libvirt. In-place restores only run on the job's own agent.</p>
+  {{else if $on}}<p class="hint">Restores here need a target directory on that agent; in-place restores only run on the job's own agent.</p>{{end}}
+  {{if and .ServerWhy (eq $on "server")}}<p class="err">{{.ServerWhy}}</p>{{end}}
   {{end}}
   <div class="card">
     {{if .Entries}}
@@ -39,7 +42,7 @@
   <p class="hint">Leave the target empty to put everything back where it came from: the compose directory
     <span class="mono">{{.Job.Stack.WorkingDir}}</span>, each mount at its original path, and the dumps into
     <span class="mono">.voidgrid-backup-dumps/</span> in the compose directory. Existing files there are overwritten.
-    With a target, the snapshot is written under that empty directory instead and no containers are touched.</p>
+    With a target, the snapshot is written under that empty directory instead and no containers are touched, so it needs no Docker on the host that restores it. To restore only part of it (say one data folder, not the whole stack), open the folders above and use "Restore as files" below on that folder.</p>
   <div class="card">
     <form class="grid" method="post" action="{{$base}}/restore-stack">
       <input type="hidden" name="on" value="{{$on}}">
@@ -86,7 +89,7 @@
     <form class="grid" method="post" action="{{$base}}/restore">
       <input type="hidden" name="on" value="{{$on}}">
       <input type="hidden" name="path" value="{{.Path}}">
-      <label class="wide">Target directory on the agent <input name="target" class="mono" value="{{.Target}}" required></label>
+      <label class="wide">Target directory on {{if eq $on "server"}}the server{{else}}the agent{{end}} <input name="target" class="mono" value="{{.Target}}" required></label>
       <label class="check wide"><input type="checkbox" name="overwrite"> Overwrite existing files in the target</label>
       <div class="actions"><button type="submit">Restore</button></div>
     </form>

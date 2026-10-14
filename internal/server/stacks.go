@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
@@ -93,7 +94,12 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, 
 			where = targetRoot
 		}
 		run.Summary = fmt.Sprintf("restore stack %s from %s to %s%s", job.Stack.Project, shortID(snapshotID), where, onHost(job, agent))
-		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
+		resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+			// A directory restore needs no Docker; only an in-place one does,
+			// and that never runs on the server (jobOp refuses it).
+			st, err := c.Engine.RestoreStack(ctx, er, nil, snapshotID, targetRoot, stopStack)
+			return restoreResponse(st), err
+		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 			return cl.RestoreStack(ctx, &agentpb.RestoreStackRequest{Repository: toProtoRepo(repo),
 				SnapshotId: snapshotID, TargetRoot: targetRoot, StopStack: stopStack})
 		})

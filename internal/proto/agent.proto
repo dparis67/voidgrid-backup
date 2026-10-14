@@ -48,6 +48,9 @@ service Agent {
   // location in `repository` to the one in new_config_json (SFTP and
   // filesystem only) and refuses if the destination exists.
   rpc TestRepository(TestRepositoryRequest) returns (TestRepositoryResponse);
+  // TakeMaintenance makes this agent the maintenance owner. The caller must
+  // make sure nothing is running on the repository.
+  rpc TakeMaintenance(TakeMaintenanceRequest) returns (TakeMaintenanceResponse);
   rpc MoveRepository(MoveRepositoryRequest) returns (MoveRepositoryResponse);
 
   // Host filesystem sizes, for choosing what to back up.
@@ -404,7 +407,20 @@ message TestRepositoryRequest {
 
 message TestRepositoryResponse {
   repeated string warnings = 1;
+  // Kopia's unique ID of the repository (hex), so the server can tell that two
+  // paths are the same repository. Empty from an agent older than this field.
+  string repository_id = 2;
+  // The recorded maintenance owner ("user@host"), empty if none.
+  string owner = 3;
 }
+
+// TakeMaintenanceRequest makes the receiving agent the repository's
+// maintenance owner, replacing whoever was.
+message TakeMaintenanceRequest {
+  Repository repository = 1;
+}
+
+message TakeMaintenanceResponse {}
 
 message MoveRepositoryRequest {
   // The repository at its current location.

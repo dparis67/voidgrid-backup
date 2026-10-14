@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
@@ -56,7 +57,11 @@ func (c *Controller) RestoreVM(ctx context.Context, jobID, onID, snapshotID, tar
 			where = targetDir
 		}
 		run.Summary = fmt.Sprintf("restore VM %s from %s to %s%s", job.VM.Name, shortID(snapshotID), where, onHost(job, agent))
-		resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
+		resp, err := runOn(c, agent, repo, runTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.RestoreResponse, error) {
+			// Into a directory the hypervisor is not used; in place never runs here.
+			st, err := c.Engine.RestoreVM(ctx, er, nil, snapshotID, targetDir, define)
+			return restoreResponse(st), err
+		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RestoreResponse, error) {
 			return cl.RestoreVM(ctx, &agentpb.RestoreVMRequest{Repository: toProtoRepo(repo),
 				SnapshotId: snapshotID, TargetDir: targetDir, Define: define})
 		})
