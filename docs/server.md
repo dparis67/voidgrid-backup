@@ -320,6 +320,12 @@ together; the first runs after a server start are spread over 2 hours) for each
 repository that has at least one job. A repository with a running job waits.
 A repository without jobs is never scheduled. The **Run now** button on the
 Repositories page runs a full cycle on demand and works for every repository.
+On a job's page, tick **then run maintenance** next to **Back up now** to back
+the job up and then run a full cycle on its repository, due or not; it is
+skipped if the backup fails. Every cycle is recorded with how long it took and
+how long it waited for its agent: the Repositories page lists the last 10, and
+the Schedule page draws the next one as a striped bar on the agent's lane. A
+cycle holds its agent like a backup, so jobs on that agent queue behind it.
 
 The server asks an agent with a job on the repository; if that agent is not the
 owner it names the owner (the owner's host name is its agent ID) and the server

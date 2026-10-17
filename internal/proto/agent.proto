@@ -461,4 +461,7 @@ message MaintainResponse {
   // Set when this agent is not the maintenance owner: "user@host", where host
   // is the owning agent's ID. Nothing ran in that case.
   string owner = 2;
+  // How long the request waited for the agent to finish earlier operations
+  // before it started. 0 from an agent that predates the field.
+  int64 queued_ms = 3;
 }

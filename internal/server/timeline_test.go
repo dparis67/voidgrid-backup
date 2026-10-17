@@ -28,7 +28,7 @@ func TestBuildTimeline(t *testing.T) {
 		row("e", "box2", "r2", "0 5 * * *", false, time.Hour),      // off
 		row("f", "box2", "r2", "0 22 * * *", true, 2*time.Hour),    // late in the window
 	}
-	lanes, ticks, nowPct, unscheduled := buildTimeline(rows, "agent", now)
+	lanes, ticks, nowPct, unscheduled := buildTimeline(rows, nil, "agent", now)
 	if len(ticks) != 24 || ticks[0].Label != "02:00" || ticks[1].Label != "" {
 		t.Fatalf("ticks: %+v", ticks[:3])
 	}
@@ -58,7 +58,7 @@ func TestBuildTimeline(t *testing.T) {
 	}
 
 	// By repository, a and c share r1 and overlap there instead.
-	lanes, _, _, _ = buildTimeline(rows, "repo", now)
+	lanes, _, _, _ = buildTimeline(rows, nil, "repo", now)
 	if len(lanes) != 2 || lanes[0].Name != "r1" || !lanes[0].Bars[0].Clash || !lanes[0].Bars[1].Clash {
 		t.Fatalf("repository lanes: %+v", lanes)
 	}
@@ -402,5 +402,52 @@ func TestPhaseSummary(t *testing.T) {
 	}
 	if got := phaseSummary(&agentpb.PhaseTimings{OpenMs: 400}); got != "" {
 		t.Errorf("a fast run should add nothing, got %q", got)
+	}
+}
+
+// Maintenance is drawn as a bar on the lane of the agent that runs it, from its
+// due time for as long as its recent cycles took, and holds the agent like a job.
+func TestTimelineShowsMaintenance(t *testing.T) {
+	now := time.Date(2026, 10, 14, 2, 30, 0, 0, time.UTC)
+	rows := []jobRow{{Job: catalog.Job{ID: "a", Name: "a", Schedule: "0 3 * * *", Enabled: true}, Agent: "box1", Repo: "r1", Dur: 40 * time.Minute}}
+	maints := []maintSlot{
+		{Repo: "r1", Agent: "box1", Start: now.Add(45 * time.Minute), Dur: time.Hour},            // overlaps the job
+		{Repo: "r2", Agent: "box2", Start: now.Add(30 * time.Hour), Dur: time.Hour, Guess: true}, // beyond the 24 hours
+	}
+	lanes, _, _, _ := buildTimeline(rows, maints, "agent", now)
+	if len(lanes) != 1 || len(lanes[0].Bars) != 2 {
+		t.Fatalf("want one lane with the job and one maintenance bar: %+v", lanes)
+	}
+	var m tlBar
+	for _, b := range lanes[0].Bars {
+		if b.Maint {
+			m = b
+		}
+	}
+	if m.Name != "maintenance: r1" || m.Start != "03:15" || m.End != "04:15" || m.Href != "/repositories" || !m.Clash {
+		t.Fatalf("maintenance bar: %+v", m)
+	}
+	lanes, _, _, _ = buildTimeline(rows, maints, "repo", now)
+	if len(lanes) != 1 || lanes[0].Name != "r1" {
+		t.Fatalf("by repository the bar sits in its repository's lane: %+v", lanes)
+	}
+}
+
+// A maintenance cycle's expected length is the longest successful one lately.
+func TestMaintDuration(t *testing.T) {
+	t0 := time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC)
+	run := func(status string, took, queued time.Duration) catalog.MaintenanceRun {
+		return catalog.MaintenanceRun{Status: status, StartedAt: t0, FinishedAt: t0.Add(took + queued), Queued: queued}
+	}
+	if d, guess := maintDuration(nil); d != overlapDefault || !guess {
+		t.Errorf("no history: %v %v, want the default as a guess", d, guess)
+	}
+	d, guess := maintDuration([]catalog.MaintenanceRun{
+		run("ok", 20*time.Minute, 2*time.Hour), // the wait is not the work
+		run("failed", 5*time.Hour, 0),          // failures say nothing about a good run
+		run("ok", 8*time.Minute, 0),
+	})
+	if d != 20*time.Minute || guess {
+		t.Errorf("maintDuration = %v, %v, want 20m", d, guess)
 	}
 }

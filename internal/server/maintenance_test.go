@@ -43,6 +43,10 @@ func TestMaintainRepositoryRecordsAndSchedules(t *testing.T) {
 	if !ok || got.Status != "ok" || got.LastRun.IsZero() {
 		t.Fatalf("saved state: %+v ok=%v", got, ok)
 	}
+	runs, err := c.Catalog.ListMaintenanceRuns(ctx, job.RepositoryID, 10)
+	if err != nil || len(runs) != 1 || runs[0].Status != "ok" || runs[0].AgentID != job.AgentID || runs[0].FinishedAt.Before(runs[0].StartedAt) {
+		t.Fatalf("the cycle was not recorded: %+v %v", runs, err)
+	}
 }
 
 // Kopia lets only the owner run maintenance: when the first agent asked is not
@@ -130,5 +134,38 @@ func TestStartMaintenanceSkipsRepositoriesWithoutJobs(t *testing.T) {
 	}
 	if m, err := c.MaintainRepository(ctx, job.RepositoryID); err != nil || m.Status != "ok" {
 		t.Fatalf("manual run: %+v %v", m, err)
+	}
+}
+
+// Backing up with the maintenance option runs a cycle after the backup, though
+// none is due; a failed backup skips it.
+func TestRunJobThenMaintain(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+
+	run, err := c.RunJobThenMaintain(ctx, job.ID, "manual")
+	if err != nil || run.Status != catalog.RunSuccess {
+		t.Fatalf("backup: %+v %v", run, err)
+	}
+	runs, err := c.Catalog.ListMaintenanceRuns(ctx, job.RepositoryID, 10)
+	if err != nil || len(runs) != 1 || runs[0].Status != "ok" || runs[0].StartedAt.Before(run.FinishedAt.Add(-time.Second)) {
+		t.Fatalf("maintenance should follow the backup: %+v %v", runs, err)
+	}
+
+	// A job whose source is gone fails, and nothing more is run.
+	j, err := c.Catalog.Job(ctx, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Paths = []string{"/nonexistent-path-for-test"}
+	if err := c.Catalog.UpdateJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	run, err = c.RunJobThenMaintain(ctx, job.ID, "manual")
+	if err != nil || run.Status != catalog.RunFailed {
+		t.Fatalf("expected the backup to fail: %+v %v", run, err)
+	}
+	if runs, _ := c.Catalog.ListMaintenanceRuns(ctx, job.RepositoryID, 10); len(runs) != 1 {
+		t.Fatalf("a failed backup must not start maintenance: %d cycles recorded", len(runs))
 	}
 }

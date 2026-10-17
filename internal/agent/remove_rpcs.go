@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
@@ -40,14 +41,16 @@ func (a *Agent) Maintain(ctx context.Context, req *agentpb.MaintainRequest) (*ag
 	if err != nil {
 		return nil, err
 	}
+	waiting := time.Now()
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	queued := time.Since(waiting)
 	logStarted("maintenance started", r.ID)
 	ran, owner, err := a.engine.Maintain(ctx, r)
 	if err != nil {
 		return nil, err
 	}
-	return &agentpb.MaintainResponse{Ran: ran, Owner: owner}, nil
+	return &agentpb.MaintainResponse{Ran: ran, Owner: owner, QueuedMs: queued.Milliseconds()}, nil
 }
 
 // TestRepository opens the repository at the location in the request without

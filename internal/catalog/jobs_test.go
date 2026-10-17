@@ -68,6 +68,18 @@ func TestRepositoriesJobsRuns(t *testing.T) {
 	if last.Queued != 30*time.Second || last.Took() != 30*time.Second {
 		t.Fatalf("queued %v took %v, want 30s and 30s (1m run, 30s of it waiting)", last.Queued, last.Took())
 	}
+	mnow := now.Truncate(time.Millisecond)
+	for i, q := range []time.Duration{0, 40 * time.Minute} {
+		at := mnow.Add(time.Duration(i) * time.Hour)
+		if err := c.AddMaintenanceRun(ctx, MaintenanceRun{RepositoryID: "r1", AgentID: "a1", Status: "ok",
+			StartedAt: at, FinishedAt: at.Add(time.Hour), Queued: q}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mruns, err := c.ListMaintenanceRuns(ctx, "r1", 10)
+	if err != nil || len(mruns) != 2 || mruns[0].Queued != 40*time.Minute || mruns[0].Took() != 20*time.Minute || mruns[1].Took() != time.Hour {
+		t.Fatalf("maintenance runs (newest first, length less the wait): %+v %v", mruns, err)
+	}
 	runs, err := c.ListRuns(ctx, "j1", 10)
 	if err != nil || len(runs) != 2 || runs[1].ID != id || runs[1].Status != RunFailed {
 		t.Fatalf("runs: %+v %v", runs, err)

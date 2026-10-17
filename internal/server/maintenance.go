@@ -90,8 +90,10 @@ func (c *Controller) MaintainRepository(ctx context.Context, repoID string) (Rep
 
 	now := time.Now()
 	m := RepoMaintenance{LastRun: now, Status: "ok"}
-	agentID, err := c.runMaintenance(ctx, repo)
+	agentID, queued, err := c.runMaintenance(ctx, repo)
 	m.AgentID = agentID
+	c.recordMaintenanceRun(context.WithoutCancel(ctx), catalog.MaintenanceRun{
+		RepositoryID: repo.ID, AgentID: agentID, Status: "ok", StartedAt: now, FinishedAt: time.Now(), Queued: queued}, err)
 	if err != nil {
 		m.Status, m.Error = "failed", err.Error()
 		m.NextDue = now.Add(maintRetry + maintRand(maintJitter))
@@ -104,14 +106,48 @@ func (c *Controller) MaintainRepository(ctx context.Context, repoID string) (Rep
 	return m, err
 }
 
-func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository) (string, error) {
+// RunJobThenMaintain backs a job up and, if that did not fail, runs a full
+// maintenance cycle on its repository whether or not one is due. A failed
+// backup usually means the repository can't be reached, so maintenance is
+// skipped then. Maintenance that is already running is left to finish. The
+// cycle is recorded like a scheduled one; its error, if any, is logged.
+func (c *Controller) RunJobThenMaintain(ctx context.Context, jobID, trigger string) (catalog.Run, error) {
+	run, err := c.RunJob(ctx, jobID, trigger)
+	if err != nil || run.Status == catalog.RunFailed {
+		return run, err
+	}
+	job, err := c.Catalog.Job(ctx, jobID)
+	if err != nil {
+		return run, err
+	}
+	if _, err := c.MaintainRepository(ctx, job.RepositoryID); err != nil && !errors.Is(err, ErrRunning) {
+		slog.Error("maintenance after a manual backup", "job", job.Name, "err", err)
+	}
+	return run, nil
+}
+
+// recordMaintenanceRun saves a finished cycle: failed, with err, if err is set.
+func (c *Controller) recordMaintenanceRun(ctx context.Context, m catalog.MaintenanceRun, err error) {
+	if err != nil {
+		m.Status, m.Error = "failed", err.Error()
+	}
+	if rerr := c.Catalog.AddMaintenanceRun(ctx, m); rerr != nil {
+		slog.Error("record maintenance run", "repo", m.RepositoryID, "err", rerr)
+	}
+}
+
+// runMaintenance runs a cycle on the maintenance owner. It returns the agent
+// that ran it and how long the cycle waited for agents to finish earlier work.
+func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository) (string, time.Duration, error) {
 	if c.MaintainedBy(ctx, repo.ID) == MaintByServer {
-		return c.runServerMaintenance(ctx, repo)
+		id, err := c.runServerMaintenance(ctx, repo)
+		return id, 0, err
 	}
 	agent, err := c.agentForRepo(ctx, repo.ID)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
+	var queued time.Duration
 	tried := map[string]bool{}
 	for range 3 {
 		tried[agent.ID] = true
@@ -119,19 +155,20 @@ func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository
 			return cl.Maintain(ctx, &agentpb.MaintainRequest{Repository: toProtoRepo(repo, agent.ID)})
 		})
 		if err != nil {
-			return agent.ID, fmt.Errorf("on %s: %w", agent.Name, err)
+			return agent.ID, queued, fmt.Errorf("on %s: %w", agent.Name, err)
 		}
+		queued += time.Duration(resp.GetQueuedMs()) * time.Millisecond
 		if resp.GetRan() {
-			return agent.ID, nil
+			return agent.ID, queued, nil
 		}
 		owner := resp.GetOwner()
 		next, err := c.Catalog.Agent(ctx, owner[strings.LastIndex(owner, "@")+1:])
 		if err != nil || tried[next.ID] {
-			return agent.ID, fmt.Errorf("the maintenance owner is %q, which is not a registered agent (a replaced or removed host?), so no agent can run maintenance", owner)
+			return agent.ID, queued, fmt.Errorf("the maintenance owner is %q, which is not a registered agent (a replaced or removed host?), so no agent can run maintenance", owner)
 		}
 		agent = next
 	}
-	return agent.ID, errors.New("could not find the maintenance owner")
+	return agent.ID, queued, errors.New("could not find the maintenance owner")
 }
 
 // startMaintenance starts the full cycle of every repository that has jobs

@@ -53,6 +53,11 @@
             {{else if .Maint}}{{if not .Maint.LastRun.IsZero}}<span class="{{if eq .Maint.Status "ok"}}ok{{else}}bad{{end}}">{{.Maint.Status}}</span> {{ago .Maint.LastRun}}{{else}}<span class="muted">not run yet</span>{{end}}
               {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
               {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
+              {{with .MaintRuns}}<details><summary class="muted">took {{tookMaint (index . 0)}}{{if (index . 0).Queued}} (queued {{(index . 0).Queued.Round 1000000000}}){{end}}; history</summary>
+                <table><thead><tr><th>Started</th><th>On</th><th>Status</th><th>Took</th><th>Queued</th></tr></thead><tbody>
+                {{range .}}<tr><td>{{when .StartedAt}}</td><td>{{.AgentID}}</td><td><span class="{{if eq .Status "ok"}}ok{{else}}bad{{end}}">{{.Status}}</span></td><td>{{tookMaint .}}</td><td>{{if .Queued}}{{.Queued.Round 1000000000}}{{else}}-{{end}}</td></tr>
+                {{if .Error}}<tr><td></td><td colspan="4" class="err">{{.Error}}</td></tr>{{end}}{{end}}
+                </tbody></table></details>{{end}}
             {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
             <div class="muted">maintained by {{.MaintBy}}</div>
             {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" style="display:inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}

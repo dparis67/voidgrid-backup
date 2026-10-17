@@ -3466,7 +3466,10 @@ type MaintainResponse struct {
 	Ran   bool                   `protobuf:"varint,1,opt,name=ran,proto3" json:"ran,omitempty"`
 	// Set when this agent is not the maintenance owner: "user@host", where host
 	// is the owning agent's ID. Nothing ran in that case.
-	Owner         string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
+	Owner string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
+	// How long the request waited for the agent to finish earlier operations
+	// before it started. 0 from an agent that predates the field.
+	QueuedMs      int64 `protobuf:"varint,3,opt,name=queued_ms,json=queuedMs,proto3" json:"queued_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3513,6 +3516,13 @@ func (x *MaintainResponse) GetOwner() string {
 		return x.Owner
 	}
 	return ""
+}
+
+func (x *MaintainResponse) GetQueuedMs() int64 {
+	if x != nil {
+		return x.QueuedMs
+	}
+	return 0
 }
 
 var File_agent_proto protoreflect.FileDescriptor
@@ -3823,10 +3833,11 @@ const file_agent_proto_rawDesc = "" +
 	"\x0fMaintainRequest\x12C\n" +
 	"\n" +
 	"repository\x18\x01 \x01(\v2#.voidgridbackup.agent.v1.RepositoryR\n" +
-	"repository\":\n" +
+	"repository\"W\n" +
 	"\x10MaintainResponse\x12\x10\n" +
 	"\x03ran\x18\x01 \x01(\bR\x03ran\x12\x14\n" +
-	"\x05owner\x18\x02 \x01(\tR\x05owner2\xf6\x10\n" +
+	"\x05owner\x18\x02 \x01(\tR\x05owner\x12\x1b\n" +
+	"\tqueued_ms\x18\x03 \x01(\x03R\bqueuedMs2\xf6\x10\n" +
 	"\x05Agent\x12S\n" +
 	"\x04Ping\x12$.voidgridbackup.agent.v1.PingRequest\x1a%.voidgridbackup.agent.v1.PingResponse\x12q\n" +
 	"\x0eInitRepository\x12..voidgridbackup.agent.v1.InitRepositoryRequest\x1a/.voidgridbackup.agent.v1.InitRepositoryResponse\x12Y\n" +

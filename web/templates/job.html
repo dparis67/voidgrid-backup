@@ -3,7 +3,8 @@
   <div class="row" id="job-head">
     <h2 style="margin:0">{{$job.Name}}</h2>
     {{if $job.Running}}<span class="running">running</span>{{end}}
-    <form method="post" action="/jobs/{{$job.ID}}/run"><button type="submit" {{if $job.Running}}disabled{{end}}>Back up now</button></form>
+    <form method="post" action="/jobs/{{$job.ID}}/run"><button type="submit" {{if $job.Running}}disabled{{end}}>Back up now</button>
+      <label class="muted" style="margin-left:.5em" title="After the backup, run a full maintenance cycle on its repository even if none is due. It holds the agent until it finishes. Skipped if the backup fails."><input type="checkbox" name="maintain" value="1"> then run maintenance</label></form>
     <form method="post" action="/jobs/{{$job.ID}}/check"><button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Verify repository</button></form>
     {{if not $job.Running}}<a href="/jobs/{{$job.ID}}/edit"><button class="plain" type="button">Edit</button></a>{{end}}
     <form method="post" action="/jobs/{{$job.ID}}/toggle"><button class="plain" type="submit">{{if $job.Enabled}}Disable schedule{{else}}Enable schedule{{end}}</button></form>

@@ -32,6 +32,8 @@ type tlBar struct {
 	Past        bool
 	Movable     bool   // the schedule is simple enough to move by dragging
 	Was         string // the schedule this bar was drawn from, sent back with a move
+	Href        string // where clicking the bar goes
+	Maint       bool   // a repository's maintenance cycle, not a job
 }
 
 type tlLane struct {
@@ -100,15 +102,17 @@ func (u *ui) schedule(w http.ResponseWriter, r *http.Request) {
 	for _, j := range jobs {
 		rows = append(rows, u.jobRow(ctx, j, agents, repos))
 	}
+	now := time.Now()
 	p := timelinePage{base: u.newBase("Schedule", "schedule", r), By: by}
-	p.Lanes, p.Ticks, p.Now, p.Unscheduled = buildTimeline(rows, by, time.Now())
+	p.Lanes, p.Ticks, p.Now, p.Unscheduled = buildTimeline(rows, u.c.maintSlots(ctx, repos, jobs, agents, now), by, now)
 	u.render(w, http.StatusOK, "schedule", p)
 }
 
 // buildTimeline lays the next 24 hours out from the start of the current hour.
-// Jobs that are manual or disabled are returned in unscheduled. Bars that
+// Jobs that are manual or disabled are returned in unscheduled. Maintenance
+// cycles are drawn as bars too, as they hold their agent like a job. Bars that
 // overlap inside a lane are stacked in rows and marked as clashing.
-func buildTimeline(rows []jobRow, by string, now time.Time) (lanes []tlLane, ticks []tlTick, nowPct float64, unscheduled []string) {
+func buildTimeline(rows []jobRow, maints []maintSlot, by string, now time.Time) (lanes []tlLane, ticks []tlTick, nowPct float64, unscheduled []string) {
 	from := now.Truncate(time.Hour)
 	to := from.Add(timelineSpan)
 	pct := func(t time.Time) float64 { return float64(t.Sub(from)) / float64(timelineSpan) * 100 }
@@ -152,10 +156,34 @@ func buildTimeline(rows []jobRow, by string, now time.Time) (lanes []tlLane, tic
 			byLane[lane] = append(byLane[lane], placed{
 				bar: tlBar{JobID: r.ID, Name: r.Name, Left: left, Width: width, Start: sl.start.Format("15:04"),
 					End: sl.end.Format("15:04"), Tip: tip, Guess: r.DurGuess, Past: sl.start.Before(now),
-					Movable: movable(r.Schedule), Was: r.Schedule},
+					Movable: movable(r.Schedule), Was: r.Schedule, Href: "/jobs/" + r.ID},
 				s: sl,
 			})
 		}
+	}
+	for _, m := range maints {
+		if !m.Start.Before(to) {
+			continue
+		}
+		lane := m.Agent
+		if by == "repo" {
+			lane = m.Repo
+		}
+		end := m.Start.Add(m.Dur)
+		left := pct(m.Start)
+		width := max(pct(end)-left, minBarWidth)
+		if left+width > 100 {
+			width = 100 - left
+		}
+		tip := fmt.Sprintf("Maintenance of %s: %s to %s (%s)", m.Repo, m.Start.Format("15:04"), end.Format("15:04"), took(m.Start, end))
+		if m.Guess {
+			tip += ", estimated: no maintenance has finished yet"
+		}
+		byLane[lane] = append(byLane[lane], placed{
+			bar: tlBar{Name: "maintenance: " + m.Repo, Left: left, Width: width, Start: m.Start.Format("15:04"),
+				End: end.Format("15:04"), Tip: tip, Guess: m.Guess, Past: m.Start.Before(now), Href: "/repositories", Maint: true},
+			s: slot{m.Start, end},
+		})
 	}
 
 	names := make([]string, 0, len(byLane))

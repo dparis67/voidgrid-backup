@@ -39,6 +39,7 @@ func NewHandler(c *Controller) http.Handler {
 		"ago":       ago,
 		"took":      took,
 		"tookRun":   tookRun,
+		"tookMaint": tookMaint,
 		"mul24":     func(n int) int { return n*24 + 4 },
 		"sub1":      func(n int) int { return n - 1 },
 		"sortHeads": sortHeads,
@@ -301,9 +302,10 @@ type repoRow struct {
 	Measuring   bool       // a measurement is running now
 	Wiping      bool       // its data is being deleted now
 	Maint       *RepoMaintenance
-	Maintaining bool   // a maintenance cycle is running now
-	WipeError   string // why the last wipe failed
-	MaintBy     string // "server" or "agent": who runs maintenance
+	Maintaining bool                     // a maintenance cycle is running now
+	MaintRuns   []catalog.MaintenanceRun // its last cycles, newest first
+	WipeError   string                   // why the last wipe failed
+	MaintBy     string                   // "server" or "agent": who runs maintenance
 	Assigned    []assignedAgent
 	Unassigned  []catalog.Agent // agents that could still be assigned
 }
@@ -361,6 +363,7 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		if m, ok := u.c.RepoMaintenance(ctx, rp.ID); ok {
 			row.Maint = &m
 		}
+		row.MaintRuns, _ = u.c.Catalog.ListMaintenanceRuns(ctx, rp.ID, 10)
 		if row.Maintaining = u.c.IsRunning(repoMaintRunKey(rp.ID)); row.Maintaining {
 			p.Measuring = true
 		}
@@ -703,13 +706,27 @@ func (u *ui) setSchedule(w http.ResponseWriter, r *http.Request) {
 
 func (u *ui) runJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, err := u.c.Catalog.Job(r.Context(), id); err != nil {
+	job, err := u.c.Catalog.Job(r.Context(), id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	back := listBack(r, "/jobs/"+id)
 	if u.c.IsRunning(id) {
 		redirectNotice(w, r, back, ErrRunning.Error())
+		return
+	}
+	if r.FormValue("maintain") == "1" {
+		notice := "Backup started; maintenance follows it."
+		if u.c.IsRunning(repoMaintRunKey(job.RepositoryID)) {
+			notice = "Backup started. Maintenance of its repository is already running, so it isn't started again."
+		}
+		go func() {
+			if _, err := u.c.RunJobThenMaintain(context.Background(), id, "manual"); err != nil && !errors.Is(err, ErrRunning) {
+				slog.Error("manual backup with maintenance", "job", id, "err", err)
+			}
+		}()
+		redirectNotice(w, r, back, notice)
 		return
 	}
 	go func() {
@@ -979,6 +996,11 @@ func tookRun(r catalog.Run) string {
 		return "-"
 	}
 	return took(r.StartedAt, r.StartedAt.Add(r.Took()))
+}
+
+// tookMaint is took for a maintenance cycle, less the time it waited for its agent.
+func tookMaint(m catalog.MaintenanceRun) string {
+	return took(m.StartedAt, m.StartedAt.Add(m.Took()))
 }
 
 func ago(t time.Time) string {
