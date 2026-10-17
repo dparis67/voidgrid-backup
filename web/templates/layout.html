@@ -42,7 +42,9 @@
   h2:first-child { margin-top: 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: break-word; }
+  th, td.num { white-space: nowrap; }
+  td.mono { overflow-wrap: anywhere; } /* paths, hosts and IDs have no spaces to break at */
   th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   th a.sort { color: inherit; }
   form.inline { display: inline; margin: 0; }
