@@ -480,19 +480,36 @@ container. It needs no agent, Docker or libvirt.
 
 ### Schedule
 
-The **Schedule** page draws the next 24 hours as a timeline, one lane per agent
-(or per repository with the link above it). Each scheduled job is a bar from
-its start time for as long as its backups take; click a bar to open the job.
-The line marks now, and bars that have already started are dimmed.
+The **Schedule** page draws a window of the day as a timeline, one lane per
+agent (or per repository with the link above it). Each scheduled job is a bar
+from its start time for as long as its backups take; click a bar to open the
+job. The line marks now, and bars that have already started are dimmed.
 
-- A job's length is the longest of its last 20 finished backups. The first
+- **Zoom** the window to 5 or 15 minutes, or 1, 3, 6, 12 or 24 hours, with the
+  buttons above the timeline (24 hours is the default). The 5 and 15 minute
+  views are for jobs that last seconds. The window starts at the beginning of
+  the current hour, or of the current 5 or 15 minutes in those two views.
+  **Earlier** and **later** move it by its own length, **now** goes back to the
+  current hour, and the **Start at** field sets an exact time. The zoom and
+  start are in the page's address (`span` is the length in minutes), so a link
+  or a refresh keeps the view. A bar is never drawn narrower than a few pixels,
+  and a name that does not fit in its bar is written beside it when there is
+  room (otherwise it is in the hover text). A
+  run that began before the window and is still going at its left edge is
+  drawn from the edge.
+- A job's length is the longest of its last 20 finished backups, not counting
+  the time a run waited for its agent (runs from before that was recorded
+  still include it). The first
   backup is the longest by design, so it sets the reservation until later
   runs are longer. A dashed bar has no finished backup yet and assumes 15
   minutes.
 - Jobs on one agent run one after another, so overlapping bars in an agent
   lane wait for each other. Jobs on one repository share its connections and
-  bandwidth. Overlapping bars are stacked and drawn in the warning colour.
-- **Drag a bar sideways** to change when its job starts, in 5 minute steps.
+  bandwidth. Each job has its own row in its lane (jobs in name order, then
+  maintenance), with every run of it on that row, so a job keeps its row when
+  you drag it. Bars that overlap in time are drawn in the warning colour.
+- **Drag a bar sideways** to change when its job starts, in 5 minute steps (1
+  minute in views of 3 hours or less).
   The bar's job gets a new minute and hour in its cron schedule, and it
   applies from the next scheduled start. This works for a schedule with one
   start time a day (`0 20 * * *`, or limited to weekdays such as

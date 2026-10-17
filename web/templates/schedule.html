@@ -1,15 +1,29 @@
 {{define "schedule"}}{{template "top" .}}
   <h2>Schedule</h2>
-  <p class="hint">The next 24 hours, in {{.TZ}}. Each bar is a scheduled job, from its start time for as long as its backups take (the longest of its last 20, so the first backup counts; dashed means no backup has finished yet and 15 minutes is assumed). Jobs on one agent run one after another, so overlapping bars in an agent lane wait for each other; jobs on one repository share its connections and bandwidth. Drag a bar sideways to change when its job starts (in 5 minute steps); that works for a job with a single start time a day. Any other schedule is edited on the <a href="/jobs">Jobs</a> page. The striped bars are repository maintenance, drawn at its next due time for as long as its last cycles took (the longest of 10); it holds the agent like a job does, and its due time shifts a little each day.</p>
+  <p class="hint">Times are in {{.TZ}}. Each bar is a scheduled job, from its start time for as long as its backups take (never drawn narrower than a few pixels, and a name that doesn't fit in its bar is written beside it; the 5 and 15 minute zooms are for jobs that last seconds) (the longest of its last 20, so the first backup counts; dashed means no backup has finished yet and 15 minutes is assumed). Jobs on one agent run one after another, so overlapping bars in an agent lane wait for each other; jobs on one repository share its connections and bandwidth. Drag a bar sideways to change when its job starts (in 5 minute steps, or 1 minute in views of 3 hours or less); that works for a job with a single start time a day. Any other schedule is edited on the <a href="/jobs">Jobs</a> page. The striped bars are repository maintenance, drawn at its next due time for as long as its last cycles took (the longest of 10); it holds the agent like a job does, and its due time shifts a little each day.</p>
   <p class="hint" id="tl-status" role="status" style="min-height:1.5em"></p>
   <p>
-    <a href="/schedule" {{if eq .By "agent"}}class="on"{{end}}>By agent</a> ·
-    <a href="/schedule?by=repo" {{if eq .By "repo"}}class="on"{{end}}>By repository</a>
+    <a href="/schedule{{if ne .SpanMin 1440}}?span={{.SpanMin}}{{end}}" {{if eq .By "agent"}}class="on"{{end}}>By agent</a> ·
+    <a href="/schedule?by=repo{{if ne .SpanMin 1440}}&amp;span={{.SpanMin}}{{end}}" {{if eq .By "repo"}}class="on"{{end}}>By repository</a>
   </p>
+  <form method="get" action="/schedule" class="row" id="tl-controls" style="gap:.5em;align-items:center;flex-wrap:wrap">
+    <span class="muted">Zoom</span>
+    {{range .Zooms}}<a href="{{.Href}}" {{if .On}}class="on"{{end}}>{{.Label}}</a>{{end}}
+    <span class="muted">·</span>
+    <a href="{{.Earlier}}">&larr; earlier</a>
+    <a href="{{.NowHref}}">now</a>
+    <a href="{{.Later}}">later &rarr;</a>
+    <span class="muted">·</span>
+    {{if eq .By "repo"}}<input type="hidden" name="by" value="repo">{{end}}
+    {{if ne .SpanMin 1440}}<input type="hidden" name="span" value="{{.SpanMin}}">{{end}}
+    <label class="muted">Start at <input type="datetime-local" name="from" value="{{.FromValue}}" required></label>
+    <button class="plain" type="submit">Go</button>
+  </form>
   <div id="tl">
+  <p class="hint" style="margin:.4em 0">{{.Range}}</p>
   <div class="card tl-wrap">
     {{if .Lanes}}
-    <div class="tl">
+    <div class="tl" data-span="{{.SpanMin}}" data-step="{{.StepMin}}">
       <div class="tl-lane tl-head">
         <div class="tl-label"></div>
         <div class="tl-track" style="height:1.6em">
@@ -21,13 +35,13 @@
         <div class="tl-label">{{.Name}}</div>
         <div class="tl-track" style="height:{{mul24 .Rows}}px">
           {{range $.Ticks}}<span class="tl-line" style="left:{{printf "%.3f" .Left}}%"></span>{{end}}
-          <span class="tl-now" style="left:{{printf "%.3f" $.Now}}%"></span>
-          {{range .Bars}}<a class="tl-bar{{if .Clash}} clash{{end}}{{if .Guess}} guess{{end}}{{if .Past}} past{{end}}{{if .Movable}} movable{{end}}{{if .Maint}} maint{{end}}" href="{{.Href}}"{{if .Movable}} draggable="false"{{end}} title="{{.Tip}}{{if .Movable}}. Drag to change its start time.{{end}}"{{if .Movable}} data-job="{{.JobID}}" data-was="{{.Was}}" data-name="{{.Name}}" data-start="{{.Start}}"{{end}} style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;top:{{mul24 .Row}}px">{{.Name}}</a>{{end}}
+          {{if $.ShowNow}}<span class="tl-now" style="left:{{printf "%.3f" $.Now}}%"></span>{{end}}
+          {{range .Bars}}<a class="tl-bar{{if .Clash}} clash{{end}}{{if .Guess}} guess{{end}}{{if .Past}} past{{end}}{{if .Movable}} movable{{end}}{{if .Maint}} maint{{end}}{{if .Spill}} spill{{end}}" href="{{.Href}}"{{if .Movable}} draggable="false"{{end}} title="{{.Tip}}{{if .Movable}}. Drag to change its start time.{{end}}"{{if .Movable}} data-job="{{.JobID}}" data-was="{{.Was}}" data-name="{{.Name}}" data-start="{{.Start}}"{{end}} style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;top:{{mul24 .Row}}px">{{if .Spill}}<span class="tl-name {{.Spill}}">{{.Name}}</span>{{else}}{{.Name}}{{end}}</a>{{end}}
         </div>
       </div>
       {{end}}
     </div>
-    {{else}}<div class="empty">No scheduled jobs in the next 24 hours.</div>{{end}}
+    {{else}}<div class="empty">Nothing is scheduled in this window.</div>{{end}}
   </div>
   {{if .Unscheduled}}<p class="hint">Not on the timeline (manual or off): {{join .Unscheduled ", "}}.</p>{{end}}
   </div>
@@ -37,7 +51,7 @@
   // job's cron schedule by the number of minutes dragged; the page is then
   // fetched again to redraw. A drag shorter than a few pixels is a click.
   (function () {
-    var STEP = 5, SLOP = 4;
+    var SLOP = 4;
     var drag = null, status = document.getElementById("tl-status");
     function say(msg) { status.textContent = msg; }
     function clock(start, shift) {
@@ -53,9 +67,10 @@
     document.addEventListener("pointerdown", function (e) {
       var bar = e.target.closest && e.target.closest(".tl-bar.movable");
       if (!bar || e.button !== 0) return;
-      var track = bar.parentNode.getBoundingClientRect();
+      var track = bar.parentNode.getBoundingClientRect(), scale = bar.closest(".tl");
       drag = { bar: bar, x: e.clientX, track: track, moved: false, shift: 0,
-               minPerPx: 1440 / track.width, left: bar.getBoundingClientRect().left - track.left,
+               step: parseInt(scale.dataset.step, 10) || 5,
+               minPerPx: (parseInt(scale.dataset.span, 10) || 1440) / track.width, left: bar.getBoundingClientRect().left - track.left,
                width: bar.getBoundingClientRect().width };
       bar.setPointerCapture(e.pointerId);
     });
@@ -66,7 +81,7 @@
       drag.moved = true;
       // Stay inside the track, then snap to whole steps.
       dx = Math.max(-drag.left, Math.min(drag.track.width - drag.left - drag.width, dx));
-      drag.shift = Math.round(dx * drag.minPerPx / STEP) * STEP;
+      drag.shift = Math.round(dx * drag.minPerPx / drag.step) * drag.step;
       drag.bar.style.transform = "translateX(" + (drag.shift / drag.minPerPx) + "px)";
       drag.bar.classList.add("dragging");
       say(drag.bar.dataset.name + ": " + drag.bar.dataset.start + " → " + clock(drag.bar.dataset.start, drag.shift));

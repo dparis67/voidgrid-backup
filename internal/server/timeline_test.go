@@ -15,6 +15,9 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
 
+// day is the default window: 24 hours from the start of the current hour.
+func day(now time.Time) tlView { return tlView{From: now.Truncate(time.Hour), Span: 24 * time.Hour} }
+
 func TestBuildTimeline(t *testing.T) {
 	now := time.Date(2026, 10, 14, 2, 30, 0, 0, time.UTC)
 	row := func(name, agent, repo, sched string, on bool, dur time.Duration) jobRow {
@@ -28,7 +31,7 @@ func TestBuildTimeline(t *testing.T) {
 		row("e", "box2", "r2", "0 5 * * *", false, time.Hour),      // off
 		row("f", "box2", "r2", "0 22 * * *", true, 2*time.Hour),    // late in the window
 	}
-	lanes, ticks, nowPct, unscheduled := buildTimeline(rows, nil, "agent", now)
+	lanes, ticks, nowPct, unscheduled := buildTimeline(rows, nil, "agent", now, day(now))
 	if len(ticks) != 24 || ticks[0].Label != "02:00" || ticks[1].Label != "" {
 		t.Fatalf("ticks: %+v", ticks[:3])
 	}
@@ -50,7 +53,7 @@ func TestBuildTimeline(t *testing.T) {
 		t.Fatalf("bar a: %+v", b)
 	}
 	box2 := lanes[1]
-	if box2.Rows != 1 || box2.Bars[0].Clash || box2.Bars[1].Clash {
+	if box2.Rows != 2 || box2.Bars[0].Clash || box2.Bars[1].Clash {
 		t.Fatalf("box2 has no overlap on its own agent: %+v", box2)
 	}
 	if last := box2.Bars[1]; last.Name != "f" || last.Left+last.Width > 100.0001 {
@@ -58,7 +61,7 @@ func TestBuildTimeline(t *testing.T) {
 	}
 
 	// By repository, a and c share r1 and overlap there instead.
-	lanes, _, _, _ = buildTimeline(rows, nil, "repo", now)
+	lanes, _, _, _ = buildTimeline(rows, nil, "repo", now, day(now))
 	if len(lanes) != 2 || lanes[0].Name != "r1" || !lanes[0].Bars[0].Clash || !lanes[0].Bars[1].Clash {
 		t.Fatalf("repository lanes: %+v", lanes)
 	}
@@ -81,7 +84,7 @@ func TestJobDurationAndPage(t *testing.T) {
 	defer srv.Close()
 	client := authedClient(t, c, srv)
 	body := get(t, client, srv.URL+"/schedule", `class="tl-bar`)
-	if !strings.Contains(body, ">docs</a>") {
+	if !strings.Contains(body, `data-name="docs"`) && !strings.Contains(body, ">docs</") {
 		t.Fatalf("the job is not on the timeline:\n%s", body)
 	}
 	get(t, client, srv.URL+"/schedule?by=repo", "local") // the repository's name labels the lane
@@ -169,7 +172,7 @@ func TestMoveScheduleEndpoint(t *testing.T) {
 	}
 	get(t, client, srv.URL+"/schedule", `class="tl-bar`)
 	body := get(t, client, srv.URL+"/schedule", "tl-bar")
-	if !strings.Contains(body, ` movable"`) || !strings.Contains(body, `data-was="0 20 * * *"`) {
+	if !strings.Contains(body, ` movable`) || !strings.Contains(body, `data-was="0 20 * * *"`) {
 		t.Fatalf("simple schedule is not draggable:\n%s", body)
 	}
 }
@@ -414,7 +417,7 @@ func TestTimelineShowsMaintenance(t *testing.T) {
 		{Repo: "r1", Agent: "box1", Start: now.Add(45 * time.Minute), Dur: time.Hour},            // overlaps the job
 		{Repo: "r2", Agent: "box2", Start: now.Add(30 * time.Hour), Dur: time.Hour, Guess: true}, // beyond the 24 hours
 	}
-	lanes, _, _, _ := buildTimeline(rows, maints, "agent", now)
+	lanes, _, _, _ := buildTimeline(rows, maints, "agent", now, day(now))
 	if len(lanes) != 1 || len(lanes[0].Bars) != 2 {
 		t.Fatalf("want one lane with the job and one maintenance bar: %+v", lanes)
 	}
@@ -427,7 +430,7 @@ func TestTimelineShowsMaintenance(t *testing.T) {
 	if m.Name != "maintenance: r1" || m.Start != "03:15" || m.End != "04:15" || m.Href != "/repositories" || !m.Clash {
 		t.Fatalf("maintenance bar: %+v", m)
 	}
-	lanes, _, _, _ = buildTimeline(rows, maints, "repo", now)
+	lanes, _, _, _ = buildTimeline(rows, maints, "repo", now, day(now))
 	if len(lanes) != 1 || lanes[0].Name != "r1" {
 		t.Fatalf("by repository the bar sits in its repository's lane: %+v", lanes)
 	}
@@ -449,5 +452,213 @@ func TestMaintDuration(t *testing.T) {
 	})
 	if d != 20*time.Minute || guess {
 		t.Errorf("maintDuration = %v, %v, want 20m", d, guess)
+	}
+}
+
+func TestParseView(t *testing.T) {
+	now := time.Date(2026, 10, 14, 2, 37, 40, 0, time.Local)
+	hour := now.Truncate(time.Hour)
+	for _, c := range []struct {
+		q        string
+		minutes  int
+		from     time.Time
+		explicit bool
+	}{
+		{"", 1440, hour, false},
+		{"span=180", 180, hour, false},
+		{"span=7", 1440, hour, false}, // not one of the zooms
+		{"span=3", 1440, hour, false}, // the old unit, hours, is not a zoom now
+		{"span=junk&from=junk", 1440, hour, false},
+		{"span=15", 15, time.Date(2026, 10, 14, 2, 30, 0, 0, time.Local), false}, // the quarter hour
+		{"span=5", 5, time.Date(2026, 10, 14, 2, 35, 0, 0, time.Local), false},   // the 5 minutes
+		{"span=60&from=2026-10-15T22:05", 60, time.Date(2026, 10, 15, 22, 5, 0, 0, time.Local), true},
+	} {
+		q, _ := url.ParseQuery(c.q)
+		v, explicit := parseView(q, now)
+		if v.minutes() != c.minutes || !v.From.Equal(c.from) || explicit != c.explicit {
+			t.Errorf("parseView(%q) = %dm from %v explicit=%v; want %dm from %v explicit=%v", c.q, v.minutes(), v.From, explicit, c.minutes, c.from, c.explicit)
+		}
+	}
+}
+
+func TestTLHref(t *testing.T) {
+	from := time.Date(2026, 10, 15, 22, 5, 0, 0, time.Local)
+	for _, c := range []struct {
+		by      string
+		minutes int
+		from    *time.Time
+		want    string
+	}{
+		{"agent", 1440, nil, "/schedule"},
+		{"repo", 180, nil, "/schedule?by=repo&span=180"},
+		{"agent", 5, &from, "/schedule?from=2026-10-15T22%3A05&span=5"},
+	} {
+		if got := tlHref(c.by, c.minutes, c.from); got != c.want {
+			t.Errorf("tlHref(%s, %d) = %q, want %q", c.by, c.minutes, got, c.want)
+		}
+	}
+	for m, want := range map[int]string{5: "5 m", 15: "15 m", 60: "1 h", 1440: "24 h"} {
+		if got := zoomLabel(m); got != want {
+			t.Errorf("zoomLabel(%d) = %q, want %q", m, got, want)
+		}
+	}
+}
+
+// Each zoom divides the window into the ticks it promises, labelled as it says.
+func TestTimelineTicksPerZoom(t *testing.T) {
+	now := time.Date(2026, 10, 14, 2, 30, 0, 0, time.Local)
+	for _, c := range []struct {
+		minutes, ticks int
+		labels         []string // of the first ticks ("" if unlabelled)
+	}{
+		{1440, 24, []string{"02:00", ""}},
+		{720, 12, []string{"02:00", "03:00"}},
+		{360, 12, []string{"02:00", "02:30"}},
+		{180, 12, []string{"02:00", "02:15"}},
+		{60, 12, []string{"02:00", ""}},
+		{15, 15, []string{"02:30", "", "", "", "", "02:35"}}, // a tick a minute, a label every 5th
+		{5, 10, []string{"02:30", "", "02:31", ""}},          // a tick every 30 seconds, a label a minute
+	} {
+		span := time.Duration(c.minutes) * time.Minute
+		from := now.Truncate(time.Hour)
+		if span < time.Hour {
+			from = now.Truncate(span)
+		}
+		_, ticks, _, _ := buildTimeline(nil, nil, "agent", now, tlView{From: from, Span: span})
+		if len(ticks) != c.ticks {
+			t.Errorf("%dm: %d ticks, want %d", c.minutes, len(ticks), c.ticks)
+			continue
+		}
+		for i, want := range c.labels {
+			if ticks[i].Label != want {
+				t.Errorf("%dm: tick %d is labelled %q, want %q", c.minutes, i, ticks[i].Label, want)
+			}
+		}
+	}
+	// A window set to a time that is not on the hour starts at its own time,
+	// and labels fall on the 10-minute marks.
+	view := tlView{From: time.Date(2026, 10, 14, 22, 5, 0, 0, time.Local), Span: time.Hour}
+	_, ticks, _, _ := buildTimeline(nil, nil, "agent", now, view)
+	if len(ticks) != 12 || ticks[0].Left != 0 || ticks[0].Label != "" || ticks[1].Label != "22:10" || ticks[2].Label != "" {
+		t.Errorf("ticks of a window starting at 22:05: %+v", ticks)
+	}
+}
+
+// A run that began before the window and is still going at its left edge is
+// drawn, clipped to the window; one that ended before it is not.
+func TestTimelineClipsAtTheWindowEdge(t *testing.T) {
+	now := time.Date(2026, 10, 14, 2, 30, 0, 0, time.Local)
+	row := func(name, sched string, dur time.Duration) jobRow {
+		return jobRow{Job: catalog.Job{ID: name, Name: name, Schedule: sched, Enabled: true}, Agent: "box", Repo: "r", Dur: dur}
+	}
+	rows := []jobRow{
+		row("long", "30 2 * * *", 90*time.Minute), // 02:30 to 04:00
+		row("over", "0 1 * * *", 30*time.Minute),  // 01:00 to 01:30, before the window
+		row("tiny", "40 3 * * *", 5*time.Minute),  // inside it
+	}
+	view := tlView{From: time.Date(2026, 10, 14, 3, 0, 0, 0, time.Local), Span: time.Hour}
+	lanes, _, _, _ := buildTimeline(rows, nil, "agent", now, view)
+	if len(lanes) != 1 {
+		t.Fatalf("lanes: %+v", lanes)
+	}
+	got := map[string]tlBar{}
+	for _, b := range lanes[0].Bars {
+		got[b.Name] = b
+	}
+	if _, ok := got["over"]; ok || len(got) != 2 {
+		t.Fatalf("want the long and tiny bars only: %+v", got)
+	}
+	if l := got["long"]; l.Left != 0 || l.Width < 99.99 || l.Width > 100.01 {
+		t.Errorf("the long run is clipped to the first hour: left %v width %v", l.Left, l.Width)
+	}
+	if b := got["tiny"]; b.Left < 66.6 || b.Left > 66.7 || b.Width < 8.3 || b.Width > 8.4 {
+		t.Errorf("the tiny run is 5 of 60 minutes wide, from minute 40: left %v width %v", b.Left, b.Width)
+	}
+}
+
+// The page follows the span and start in its address, and the drag script gets
+// the window's length and snap from the markup.
+func TestScheduleZoomPage(t *testing.T) {
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	body := get(t, client, srv.URL+"/schedule?span=60&from="+tomorrow+"T02%3A30", `data-span="60"`)
+	for _, want := range []string{`data-step="1"`, `left:50.000%`, ">docs</a>", `value="` + tomorrow + `T02:30"`,
+		`href="/schedule?from=` + tomorrow + `T03%3A30&amp;span=60"`, `name="span" value="60"`, `data-job="` + job.ID + `"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("zoomed page lacks %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `class="tl-now"`) {
+		t.Error("the now line is drawn although now is outside the window")
+	}
+	wide := get(t, client, srv.URL+"/schedule", `data-span="1440"`)
+	if !strings.Contains(wide, `data-step="5"`) || !strings.Contains(wide, `class="tl-now"`) {
+		t.Errorf("the default window should be 24 hours with a now line:\n%s", wide)
+	}
+}
+
+// A name that doesn't fit its bar is written beside it, on the side that is free.
+func TestSpillNames(t *testing.T) {
+	// 7 px a letter on an 800 px track: 1% is 8 px, so "activity-tracker" (16
+	// letters, 112 px, 14%) needs a bar over about 15% to sit inside.
+	bar := func(name string, left, width float64, row int) tlBar {
+		return tlBar{Name: name, Left: left, Width: width, Row: row}
+	}
+	bars := []tlBar{
+		bar("activity-tracker", 10, 40, 0),  // wide: the name fits
+		bar("foundry", 60, 1, 0),            // narrow: beside it, on the right
+		bar("immich", 97, 1, 0),             // narrow at the right edge: beside it, on the left
+		bar("pocketid", 30, 0.5, 1),         // narrow in its own row
+		bar("sandwiched", 60, 0.5, 2),       // narrow, with a neighbour on both sides
+		bar("neighbour-right", 61.0, 20, 2), // the right side of the one before is taken
+		bar("neighbour-left", 20, 39.5, 2),  // and so is its left side
+	}
+	spillNames(bars)
+	want := map[string]string{"activity-tracker": "", "foundry": "right", "immich": "left", "pocketid": "right", "sandwiched": "", "neighbour-right": "", "neighbour-left": ""}
+	for _, b := range bars {
+		if b.Spill != want[b.Name] {
+			t.Errorf("%s: Spill = %q, want %q", b.Name, b.Spill, want[b.Name])
+		}
+	}
+	// Two narrow bars side by side don't both claim the space between them.
+	pair := []tlBar{bar("alpha", 50, 0.5, 0), bar("bravo", 52, 0.5, 0)}
+	spillNames(pair)
+	if pair[0].Spill == "right" && pair[1].Spill == "left" {
+		t.Errorf("both names were put in the space between the bars: %+v", pair)
+	}
+}
+
+// Every job has its own row in a lane, whether or not it overlaps another, and
+// all of a job's runs share it; maintenance comes after the jobs.
+func TestTimelineRowPerJob(t *testing.T) {
+	now := time.Date(2026, 10, 14, 2, 30, 0, 0, time.Local)
+	row := func(name, sched string) jobRow {
+		return jobRow{Job: catalog.Job{ID: name, Name: name, Schedule: sched, Enabled: true}, Agent: "box", Repo: "r", Dur: 5 * time.Minute}
+	}
+	rows := []jobRow{
+		row("zeta", "0 4 * * *"),    // does not overlap anything
+		row("alpha", "0 3 * * *"),   // does not overlap anything
+		row("hourly", "15 * * * *"), // many runs, one row
+	}
+	maints := []maintSlot{{Repo: "r", Agent: "box", Start: now.Add(10 * time.Hour), Dur: time.Hour}}
+	lanes, _, _, _ := buildTimeline(rows, maints, "agent", now, day(now))
+	if len(lanes) != 1 || lanes[0].Rows != 4 {
+		t.Fatalf("want one lane of 4 rows (three jobs and maintenance): %+v", lanes)
+	}
+	rowOf := map[string]int{}
+	for _, b := range lanes[0].Bars {
+		if prev, ok := rowOf[b.Name]; ok && prev != b.Row {
+			t.Errorf("%s runs are on rows %d and %d, want one row", b.Name, prev, b.Row)
+		}
+		rowOf[b.Name] = b.Row
+	}
+	want := map[string]int{"alpha": 0, "hourly": 1, "zeta": 2, "maintenance: r": 3}
+	for name, r := range want {
+		if rowOf[name] != r {
+			t.Errorf("%s is on row %d, want %d (name order, maintenance last)", name, rowOf[name], r)
+		}
 	}
 }
