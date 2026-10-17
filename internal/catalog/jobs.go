@@ -74,17 +74,18 @@ const (
 )
 
 type Run struct {
-	ID         int64     `json:"id"`
-	JobID      string    `json:"job_id"`
-	Kind       string    `json:"kind"`
-	Trigger    string    `json:"trigger"`
-	Status     string    `json:"status"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
-	Bytes      int64     `json:"bytes"`
-	Files      int       `json:"files"`
-	Summary    string    `json:"summary"`
-	Error      string    `json:"error"`
+	ID         int64         `json:"id"`
+	JobID      string        `json:"job_id"`
+	Kind       string        `json:"kind"`
+	Trigger    string        `json:"trigger"`
+	Status     string        `json:"status"`
+	StartedAt  time.Time     `json:"started_at"`
+	FinishedAt time.Time     `json:"finished_at"`
+	Queued     time.Duration `json:"queued"` // waiting for the agent, inside StartedAt..FinishedAt
+	Bytes      int64         `json:"bytes"`
+	Files      int           `json:"files"`
+	Summary    string        `json:"summary"`
+	Error      string        `json:"error"`
 }
 
 // Repositories
@@ -314,6 +315,15 @@ func scanJob(s scanner) (Job, error) {
 
 // Runs
 
+// Took is how long the run actually worked: from start to finish, less the
+// time it waited for its agent. 0 while it is still running.
+func (r Run) Took() time.Duration {
+	if r.FinishedAt.IsZero() {
+		return 0
+	}
+	return max(r.FinishedAt.Sub(r.StartedAt)-r.Queued, 0)
+}
+
 func (c *Catalog) StartRun(ctx context.Context, jobID, kind, trigger string, at time.Time) (int64, error) {
 	res, err := c.db.ExecContext(ctx, `INSERT INTO runs (job_id, kind, trigger, status, started_at) VALUES (?, ?, ?, ?, ?)`,
 		jobID, kind, trigger, RunRunning, formatTime(at))
@@ -324,8 +334,8 @@ func (c *Catalog) StartRun(ctx context.Context, jobID, kind, trigger string, at 
 }
 
 func (c *Catalog) FinishRun(ctx context.Context, r Run) error {
-	return c.update(ctx, `UPDATE runs SET status = ?, finished_at = ?, bytes = ?, files = ?, summary = ?, error = ? WHERE id = ?`,
-		r.Status, formatTime(r.FinishedAt), r.Bytes, r.Files, r.Summary, r.Error, r.ID)
+	return c.update(ctx, `UPDATE runs SET status = ?, finished_at = ?, queued_ms = ?, bytes = ?, files = ?, summary = ?, error = ? WHERE id = ?`,
+		r.Status, formatTime(r.FinishedAt), r.Queued.Milliseconds(), r.Bytes, r.Files, r.Summary, r.Error, r.ID)
 }
 
 // FailInterruptedRuns marks runs left "running" by a previous server process.
@@ -338,7 +348,7 @@ func (c *Catalog) FailInterruptedRuns(ctx context.Context, at time.Time) (int64,
 	return res.RowsAffected()
 }
 
-const runCols = `id, job_id, kind, trigger, status, started_at, finished_at, bytes, files, summary, error`
+const runCols = `id, job_id, kind, trigger, status, started_at, finished_at, queued_ms, bytes, files, summary, error`
 
 func (c *Catalog) ListRuns(ctx context.Context, jobID string, limit int) ([]Run, error) {
 	rows, err := c.db.QueryContext(ctx, `SELECT `+runCols+` FROM runs WHERE job_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`, jobID, limit)
@@ -366,13 +376,15 @@ func scanRun(s scanner) (Run, error) {
 	var r Run
 	var started string
 	var finished sql.NullString
-	err := s.Scan(&r.ID, &r.JobID, &r.Kind, &r.Trigger, &r.Status, &started, &finished, &r.Bytes, &r.Files, &r.Summary, &r.Error)
+	var queuedMs int64
+	err := s.Scan(&r.ID, &r.JobID, &r.Kind, &r.Trigger, &r.Status, &started, &finished, &queuedMs, &r.Bytes, &r.Files, &r.Summary, &r.Error)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
 	if err != nil {
 		return Run{}, err
 	}
+	r.Queued = time.Duration(queuedMs) * time.Millisecond
 	if r.StartedAt, err = time.Parse(time.RFC3339Nano, started); err != nil {
 		return Run{}, err
 	}

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,8 +57,19 @@ func (a *Agent) Backup(ctx context.Context, req *agentpb.BackupRequest) (*agentp
 		Monthly: int(k.GetKeepMonthly()),
 		Annual:  int(k.GetKeepAnnual()),
 	}
+	waiting := time.Now()
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
+	queued := time.Since(waiting)
+	resp, err := a.runBackup(ctx, r, req, keep)
+	if resp != nil {
+		resp.QueuedMs = queued.Milliseconds()
+	}
+	return resp, err
+}
+
+// runBackup does the backup once Backup holds the operation lock.
+func (a *Agent) runBackup(ctx context.Context, r engine.Repo, req *agentpb.BackupRequest, keep engine.Retention) (*agentpb.BackupResponse, error) {
 	logBackupStarted(r.ID, req)
 	if spec := req.GetStack(); spec != nil {
 		return a.backupStack(ctx, r, spec, keep)

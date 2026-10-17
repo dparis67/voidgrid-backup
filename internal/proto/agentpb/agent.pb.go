@@ -615,8 +615,11 @@ func (x *PhaseTimings) GetCloseMs() int64 {
 }
 
 type BackupResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Results       []*PathResult          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Results []*PathResult          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	// How long the request waited for the agent to finish earlier operations
+	// before it started. 0 from an agent that predates the field.
+	QueuedMs      int64 `protobuf:"varint,2,opt,name=queued_ms,json=queuedMs,proto3" json:"queued_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -656,6 +659,13 @@ func (x *BackupResponse) GetResults() []*PathResult {
 		return x.Results
 	}
 	return nil
+}
+
+func (x *BackupResponse) GetQueuedMs() int64 {
+	if x != nil {
+		return x.QueuedMs
+	}
+	return 0
 }
 
 type ListSnapshotsRequest struct {
@@ -3577,9 +3587,10 @@ const file_agent_proto_rawDesc = "" +
 	"\x0emaintenance_ms\x18\x06 \x01(\x03R\rmaintenanceMs\x12\x17\n" +
 	"\asave_ms\x18\a \x01(\x03R\x06saveMs\x12\x19\n" +
 	"\bflush_ms\x18\b \x01(\x03R\aflushMs\x12\x19\n" +
-	"\bclose_ms\x18\t \x01(\x03R\acloseMs\"O\n" +
+	"\bclose_ms\x18\t \x01(\x03R\acloseMs\"l\n" +
 	"\x0eBackupResponse\x12=\n" +
-	"\aresults\x18\x01 \x03(\v2#.voidgridbackup.agent.v1.PathResultR\aresults\"q\n" +
+	"\aresults\x18\x01 \x03(\v2#.voidgridbackup.agent.v1.PathResultR\aresults\x12\x1b\n" +
+	"\tqueued_ms\x18\x02 \x01(\x03R\bqueuedMs\"q\n" +
 	"\x14ListSnapshotsRequest\x12C\n" +
 	"\n" +
 	"repository\x18\x01 \x01(\v2#.voidgridbackup.agent.v1.RepositoryR\n" +

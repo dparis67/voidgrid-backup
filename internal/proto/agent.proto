@@ -141,6 +141,9 @@ message PhaseTimings {
 
 message BackupResponse {
   repeated PathResult results = 1;
+  // How long the request waited for the agent to finish earlier operations
+  // before it started. 0 from an agent that predates the field.
+  int64 queued_ms = 2;
 }
 
 message ListSnapshotsRequest {

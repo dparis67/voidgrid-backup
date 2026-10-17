@@ -34,7 +34,7 @@ func (c *Controller) jobDuration(ctx context.Context, jobID string) (d time.Dura
 		if r.Kind != "backup" || r.FinishedAt.IsZero() || (r.Status != catalog.RunSuccess && r.Status != catalog.RunPartial) {
 			continue
 		}
-		d = max(d, r.FinishedAt.Sub(r.StartedAt))
+		d = max(d, r.Took())
 	}
 	if d <= 0 {
 		return overlapDefault, true
@@ -49,7 +49,7 @@ func rowDur(r jobRow) time.Duration {
 	case r.Dur > 0:
 		return r.Dur
 	case r.Last != nil && !r.Last.FinishedAt.IsZero():
-		return max(r.Last.FinishedAt.Sub(r.Last.StartedAt), overlapMin)
+		return max(r.Last.Took(), overlapMin)
 	}
 	return overlapDefault
 }

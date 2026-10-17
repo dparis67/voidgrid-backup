@@ -38,6 +38,7 @@ func NewHandler(c *Controller) http.Handler {
 	u := &ui{c: c, tmpl: template.Must(template.New("").Funcs(template.FuncMap{
 		"ago":       ago,
 		"took":      took,
+		"tookRun":   tookRun,
 		"mul24":     func(n int) int { return n*24 + 4 },
 		"sub1":      func(n int) int { return n - 1 },
 		"sortHeads": sortHeads,
@@ -970,6 +971,14 @@ func took(start, end time.Time) string {
 		return fmt.Sprintf("%dm %02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// tookRun is took for a run, less the time it waited for its agent.
+func tookRun(r catalog.Run) string {
+	if r.FinishedAt.IsZero() {
+		return "-"
+	}
+	return took(r.StartedAt, r.StartedAt.Add(r.Took()))
 }
 
 func ago(t time.Time) string {

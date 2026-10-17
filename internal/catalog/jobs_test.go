@@ -58,12 +58,15 @@ func TestRepositoriesJobsRuns(t *testing.T) {
 		t.Fatalf("FailInterruptedRuns: %d %v", n, err)
 	}
 	id2, _ := c.StartRun(ctx, "j1", "backup", "schedule", now.Add(time.Minute))
-	if err := c.FinishRun(ctx, Run{ID: id2, Status: RunSuccess, FinishedAt: now.Add(2 * time.Minute), Bytes: 10, Files: 2}); err != nil {
+	if err := c.FinishRun(ctx, Run{ID: id2, Status: RunSuccess, FinishedAt: now.Add(2 * time.Minute), Queued: 30 * time.Second, Bytes: 10, Files: 2}); err != nil {
 		t.Fatal(err)
 	}
 	last, err := c.LastRun(ctx, "j1", "backup")
 	if err != nil || last.ID != id2 || last.Status != RunSuccess || last.Files != 2 {
 		t.Fatalf("last run: %+v %v", last, err)
+	}
+	if last.Queued != 30*time.Second || last.Took() != 30*time.Second {
+		t.Fatalf("queued %v took %v, want 30s and 30s (1m run, 30s of it waiting)", last.Queued, last.Took())
 	}
 	runs, err := c.ListRuns(ctx, "j1", 10)
 	if err != nil || len(runs) != 2 || runs[1].ID != id || runs[1].Status != RunFailed {

@@ -51,7 +51,7 @@ func sortJobs(rows []jobRow, key string, desc bool) string {
 			if r.Running || r.Last == nil || r.Last.FinishedAt.IsZero() {
 				return 0, false
 			}
-			return int64(r.Last.FinishedAt.Sub(r.Last.StartedAt)), true
+			return int64(r.Last.Took()), true
 		}
 	case "next":
 		num = func(r jobRow) (int64, bool) { return r.Next.UnixNano(), !r.Next.IsZero() }

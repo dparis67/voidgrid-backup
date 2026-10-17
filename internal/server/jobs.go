@@ -343,6 +343,7 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 	if err != nil {
 		run.Status, run.Error = catalog.RunFailed, err.Error()
 	} else {
+		run.Queued = time.Duration(resp.GetQueuedMs()) * time.Millisecond
 		summarizeBackup(&run, resp.GetResults())
 		c.recordSnapshots(context.WithoutCancel(ctx), job, resp.GetResults())
 	}

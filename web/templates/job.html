@@ -47,7 +47,7 @@
           <td>{{.Kind}}</td>
           <td>{{.Trigger}}</td>
           <td><span class="{{.Status}}">{{.Status}}</span></td>
-          <td>{{if .FinishedAt.IsZero}}-{{else}}{{.FinishedAt.Sub .StartedAt}}{{end}}</td>
+          <td>{{tookRun .}}{{if .Queued}} <span class="muted" title="waited for the agent to finish earlier work">(queued {{.Queued.Round 1000000000}})</span>{{end}}</td>
           <td class="wrap">{{.Summary}}</td>
         </tr>
         {{if .Error}}<tr><td></td><td colspan="5" class="err">{{.Error}}</td></tr>{{end}}

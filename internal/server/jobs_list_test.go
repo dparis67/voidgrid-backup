@@ -153,3 +153,28 @@ func TestSetScheduleFromList(t *testing.T) {
 		t.Errorf("blank schedule = %q, want manual", got.Schedule)
 	}
 }
+
+// A run's length leaves out the time it waited for its agent, everywhere it is
+// shown or used to lay out the schedule.
+func TestRunLengthExcludesQueueWait(t *testing.T) {
+	t0 := time.Date(2026, 10, 14, 3, 0, 0, 0, time.UTC)
+	r := catalog.Run{Kind: "backup", Status: catalog.RunSuccess, StartedAt: t0,
+		FinishedAt: t0.Add(2 * time.Hour), Queued: 110 * time.Minute}
+	if got := r.Took(); got != 10*time.Minute {
+		t.Errorf("Took = %v, want 10m", got)
+	}
+	if got := tookRun(r); got != "10m 00s" {
+		t.Errorf("tookRun = %q, want 10m 00s", got)
+	}
+	if got := rowDur(jobRow{Last: &r}); got != 10*time.Minute {
+		t.Errorf("rowDur = %v, want 10m (the schedule block length)", got)
+	}
+	old := r
+	old.Queued = 0 // a run recorded before the wait was kept, or by an old agent
+	if got := old.Took(); got != 2*time.Hour {
+		t.Errorf("Took without a recorded wait = %v, want 2h", got)
+	}
+	if got := tookRun(catalog.Run{StartedAt: t0}); got != "-" {
+		t.Errorf("tookRun of an unfinished run = %q, want -", got)
+	}
+}
