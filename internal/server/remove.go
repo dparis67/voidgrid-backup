@@ -134,9 +134,10 @@ func (c *Controller) WipeError(ctx context.Context, repoID string) string {
 // DeleteJob removes a job and its run history. With snapshots, it first
 // forgets every snapshot in the job's recorded list, in one request to the
 // agent, and keeps the job if that fails. It returns how many snapshots were
-// forgotten. Their space is released by later full maintenance, and a snapshot
-// the list hasn't picked up yet (the list is refreshed after every backup) is
-// left in the repository.
+// forgotten (a snapshot the repository no longer has counts as forgotten).
+// Their space is released by later full maintenance, and a snapshot the list
+// hasn't picked up yet (the list is refreshed after every backup) is left in
+// the repository.
 func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool) (int, error) {
 	if !c.inflight.start(jobID) {
 		return 0, ErrRunning

@@ -326,3 +326,28 @@ func TestDefaultRepositoryAndDeleteFormsOnThePages(t *testing.T) {
 		t.Errorf("delete with snapshots: %q", n)
 	}
 }
+
+// The job's snapshot list can be ahead of the repository (a snapshot removed
+// outside the server, or by retention): deleting the job with its snapshots
+// must not fail on the one that is already gone.
+func TestDeleteJobWithAStaleSnapshotRecord(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil {
+		t.Fatalf("backup: %+v %v", run, err)
+	}
+	ghost := catalog.Snapshot{ID: "d765d10f8345b3ebb04f94552800b745", Path: job.Paths[0], Start: time.Now(), End: time.Now()}
+	if err := c.Catalog.UpsertSnapshots(ctx, job.ID, []catalog.Snapshot{ghost}, nil); err != nil {
+		t.Fatal(err)
+	}
+	n, err := c.DeleteJob(ctx, job.ID, true)
+	if err != nil {
+		t.Fatalf("a stale record blocked the delete: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("forgot %d, want 2 (the real one and the record of the missing one)", n)
+	}
+	if _, err := c.Catalog.Job(ctx, job.ID); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("the job is still there: %v", err)
+	}
+}

@@ -22,13 +22,19 @@ import (
 // deleted. The data it referenced stays in storage until a later full
 // maintenance cycle garbage-collects it.
 func (e *Engine) DeleteSnapshot(ctx context.Context, r Repo, snapshotID string) error {
-	return e.DeleteSnapshots(ctx, r, []string{snapshotID})
+	return e.deleteSnapshots(ctx, r, []string{snapshotID}, false)
 }
 
-// DeleteSnapshots forgets several snapshots in one repository session. Every
-// snapshot is checked to be this agent's own before any is deleted, so a
+// DeleteSnapshots forgets several snapshots in one repository session. A
+// snapshot that is already gone is skipped, since the aim is that it is not
+// there (the server's list can be behind the repository). Every snapshot that
+// is there is checked to be this agent's own before any is deleted, so a
 // refusal leaves them all in place.
 func (e *Engine) DeleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string) error {
+	return e.deleteSnapshots(ctx, r, snapshotIDs, true)
+}
+
+func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string, skipMissing bool) error {
 	if len(snapshotIDs) == 0 {
 		return nil
 	}
@@ -42,6 +48,9 @@ func (e *Engine) DeleteSnapshots(ctx context.Context, r Repo, snapshotIDs []stri
 	for _, sid := range snapshotIDs {
 		id := manifest.ID(sid)
 		man, err := snapshot.LoadSnapshot(ctx, rep, id)
+		if skipMissing && errors.Is(err, snapshot.ErrSnapshotNotFound) {
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("load snapshot %s: %w", sid, err)
 		}
@@ -49,6 +58,9 @@ func (e *Engine) DeleteSnapshots(ctx context.Context, r Repo, snapshotIDs []stri
 			return fmt.Errorf("snapshot %s belongs to %s@%s, not to this agent", sid, man.Source.UserName, man.Source.Host)
 		}
 		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil
 	}
 	return repo.WriteSession(ctx, rep, repo.WriteSessionOptions{Purpose: "voidgrid-backup:delete-snapshot"},
 		func(ctx context.Context, w repo.RepositoryWriter) error {

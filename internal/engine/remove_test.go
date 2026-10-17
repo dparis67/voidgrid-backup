@@ -130,20 +130,28 @@ func TestDeleteSnapshotsBatch(t *testing.T) {
 		ids = append(ids, res[0].SnapshotID)
 		time.Sleep(1100 * time.Millisecond) // snapshots need distinct start times
 	}
-	// One bad ID refuses the whole batch and deletes nothing.
-	if err := e.DeleteSnapshots(ctx, r, []string{ids[0], "not-a-snapshot"}); err == nil {
-		t.Fatal("a batch with an unknown snapshot must be refused")
+	// Another host's snapshots refuse the whole batch and delete nothing.
+	other := newEngine(t, "host-b")
+	if err := other.DeleteSnapshots(ctx, r, ids); err == nil || !strings.Contains(err.Error(), "not to this agent") {
+		t.Fatalf("a batch of another host's snapshots must be refused, got %v", err)
 	}
 	if snaps, _ := e.ListSnapshots(ctx, r, []string{src}); len(snaps) != 2 {
 		t.Fatalf("a refused batch deleted snapshots: %d left, want 2", len(snaps))
 	}
-	if err := e.DeleteSnapshots(ctx, r, ids); err != nil {
-		t.Fatal(err)
+	// A snapshot that is already gone is skipped, and the rest are deleted.
+	if err := e.DeleteSnapshots(ctx, r, append([]string{"already-gone"}, ids...)); err != nil {
+		t.Fatalf("a batch with a missing snapshot: %v", err)
 	}
 	if snaps, err := e.ListSnapshots(ctx, r, []string{src}); err != nil || len(snaps) != 0 {
 		t.Fatalf("snapshots still listed: %+v %v", snaps, err)
 	}
 	if err := e.DeleteSnapshots(ctx, r, nil); err != nil {
 		t.Fatalf("an empty batch is nothing to do: %v", err)
+	}
+	if err := e.DeleteSnapshots(ctx, r, ids); err != nil {
+		t.Fatalf("a batch of snapshots that are all gone: %v", err)
+	}
+	if err := e.DeleteSnapshot(ctx, r, ids[0]); err == nil {
+		t.Fatal("deleting a single missing snapshot is still an error")
 	}
 }
