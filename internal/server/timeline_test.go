@@ -195,3 +195,47 @@ func TestLocalPath(t *testing.T) {
 		}
 	}
 }
+
+func TestZoneLabel(t *testing.T) {
+	cdt := time.Date(2026, 10, 16, 22, 0, 0, 0, time.FixedZone("CDT", -5*3600))
+	t.Setenv("TZ", "")
+	// zoneLabel formats in the process's local zone; pin that to CDT.
+	old := time.Local
+	time.Local = time.FixedZone("CDT", -5*3600)
+	defer func() { time.Local = old }()
+	if got := zoneLabel(cdt); got != "CDT (UTC-05:00)" {
+		t.Fatalf("zoneLabel = %q", got)
+	}
+	t.Setenv("TZ", "America/Chicago")
+	if got := zoneLabel(cdt); got != "America/Chicago · CDT (UTC-05:00)" {
+		t.Fatalf("with TZ set: %q", got)
+	}
+	time.Local = time.FixedZone("IST", 5*3600+1800)
+	t.Setenv("TZ", "")
+	if got := zoneLabel(cdt); got != "IST (UTC+05:30)" {
+		t.Fatalf("half-hour zone: %q", got)
+	}
+	time.Local = time.UTC
+	if got := zoneLabel(cdt); got != "UTC" {
+		t.Fatalf("utc: %q", got)
+	}
+}
+
+func TestPagesNameTheirZone(t *testing.T) {
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	want := zoneLabel(time.Now())
+	for _, page := range []string{"/", "/jobs", "/schedule", "/logs", "/jobs/" + job.ID, "/jobs/" + job.ID + "/edit"} {
+		body := get(t, client, srv.URL+page, "voidgrid-backup")
+		if !strings.Contains(body, want+" · ") {
+			t.Errorf("%s does not name the zone %q in its header", page, want)
+		}
+	}
+	for _, page := range []string{"/jobs", "/schedule", "/jobs/" + job.ID + "/edit"} {
+		if body := get(t, client, srv.URL+page, "chedule"); !strings.Contains(body, "in "+want) && !strings.Contains(body, "cron in "+want) {
+			t.Errorf("%s does not say which zone its schedules are in", page)
+		}
+	}
+}

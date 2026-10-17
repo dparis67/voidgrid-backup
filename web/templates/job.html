@@ -28,7 +28,7 @@
       <dt>Paths</dt><dd class="mono wrap">{{join $job.Paths "\n"}}</dd>
       {{end}}{{end}}
       <dt>Excludes</dt><dd class="mono wrap">{{if $job.Excludes}}{{join $job.Excludes "\n"}}{{else}}-{{end}}</dd>
-      <dt>Schedule</dt><dd class="mono">{{if $job.Schedule}}{{$job.Schedule}}{{if not $job.Enabled}} (disabled){{end}}{{else}}manual{{end}}</dd>
+      <dt>Schedule</dt><dd class="mono">{{if $job.Schedule}}{{$job.Schedule}} <span class="muted">{{$.TZ}}</span>{{if not $job.Enabled}} (disabled){{end}}{{else}}manual{{end}}</dd>
       <dt>Next backup</dt><dd>{{if $job.Next.IsZero}}-{{else}}{{when $job.Next}}{{end}}</dd>
       <dt>Retention</dt><dd>latest {{$job.Keep.Latest}}, hourly {{$job.Keep.Hourly}}, daily {{$job.Keep.Daily}}, weekly {{$job.Keep.Weekly}}, monthly {{$job.Keep.Monthly}}, annual {{$job.Keep.Annual}}</dd>
     </dl>

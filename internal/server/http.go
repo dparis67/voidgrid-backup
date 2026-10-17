@@ -12,6 +12,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"slices"
 	"strconv"
@@ -148,6 +149,7 @@ type base struct {
 	Error   string
 	Notice  string
 	User    string // signed-in identity; "" when login is off or not signed in
+	TZ      string // the zone of every time and cron schedule on the page, e.g. "CDT (UTC-05:00)"
 }
 
 func (u *ui) render(w http.ResponseWriter, code int, name string, data any) {
@@ -159,7 +161,7 @@ func (u *ui) render(w http.ResponseWriter, code int, name string, data any) {
 }
 
 func (u *ui) newBase(title, nav string, r *http.Request) base {
-	b := base{Title: title, Nav: nav, Version: version.Version, Notice: r.URL.Query().Get("notice")}
+	b := base{Title: title, Nav: nav, Version: version.Version, Notice: r.URL.Query().Get("notice"), TZ: zoneLabel(time.Now())}
 	b.User, _ = u.c.Auth().CurrentUser(r)
 	return b
 }
@@ -919,6 +921,25 @@ func replyJSON(w http.ResponseWriter, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Debug("reply not delivered", "err", err) // the client went away
 	}
+}
+
+// zoneLabel names the server's time zone as of now, the zone every displayed
+// time and cron schedule is in: "UTC", or "CDT (UTC-05:00)", with the zone's
+// name in front when TZ sets one ("America/Chicago · CDT (UTC-05:00)").
+func zoneLabel(now time.Time) string {
+	abbr, off := now.Local().Zone()
+	label := abbr
+	if off != 0 {
+		sign := "+"
+		if off < 0 {
+			sign, off = "-", -off
+		}
+		label = fmt.Sprintf("%s (UTC%s%02d:%02d)", abbr, sign, off/3600, off%3600/60)
+	}
+	if name := os.Getenv("TZ"); name != "" && name != abbr {
+		label = name + " · " + label
+	}
+	return label
 }
 
 func whenStr(t time.Time) string {

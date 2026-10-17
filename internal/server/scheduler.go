@@ -15,17 +15,26 @@ import (
 // its last backup (or after it was created, if it never ran). A time in the
 // past means it is due now; missed runs collapse into one.
 func NextRun(ctx context.Context, cat *catalog.Catalog, j catalog.Job) (time.Time, error) {
-	sched, err := cron.ParseStandard(j.Schedule)
-	if err != nil {
-		return time.Time{}, err
-	}
 	from := j.CreatedAt
 	if last, err := cat.LastRun(ctx, j.ID, "backup"); err == nil {
 		from = last.StartedAt
 	} else if !errors.Is(err, catalog.ErrNotFound) {
 		return time.Time{}, err
 	}
-	return sched.Next(from), nil
+	return nextRun(j.Schedule, from)
+}
+
+// nextRun is the first time after from that the cron expression matches, in the
+// server's local zone. The catalog hands times back in UTC, and a cron
+// expression without a zone of its own is read in the zone of the time it is
+// given, so from is converted first: without that, "0 20 * * *" would mean
+// 20:00 UTC whatever TZ is set to.
+func nextRun(schedule string, from time.Time) (time.Time, error) {
+	sched, err := cron.ParseStandard(schedule)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return sched.Next(from.In(time.Local)), nil
 }
 
 // Schedule starts due jobs and due repository maintenance every tick until

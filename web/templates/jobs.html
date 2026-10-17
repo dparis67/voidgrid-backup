@@ -32,11 +32,11 @@
   <p class="hint">To back up a Docker compose stack or a libvirt VM, open <a href="/">Agents</a> and pick "stacks" or "VMs" on the host that runs it.</p>
   <h2>Add a path job</h2>
   {{if or (not .Agents) (not .Repos)}}<div class="card"><div class="empty">Register and approve an agent, then add a repository, first.</div></div>{{else}}
-  <p class="hint">Paths are absolute paths as the agent sees them. / and /proc, /sys, /dev, /run are refused. The schedule is a standard 5-field cron expression in the server's time zone; leave it blank for manual runs only.</p>
+  <p class="hint">Paths are absolute paths as the agent sees them. / and /proc, /sys, /dev, /run are refused. The schedule is a standard 5-field cron expression in the server's time zone ({{$.TZ}}); leave it blank for manual runs only.</p>
   <div class="card">
     <form class="grid" method="post" action="/jobs">
       <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
-      <label>Schedule <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *"></label>
+      <label>Schedule (cron in {{$.TZ}}) <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *"></label>
       <label>Agent
         <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
       </label>

@@ -42,8 +42,20 @@ command line wins over the environment.
 | `-oidc-allowed-emails` | `VB_OIDC_ALLOWED_EMAILS` | (empty) | Comma-separated allowlist. Empty allows any identity the provider authenticates |
 | | `TZ` | `UTC` | Time zone for schedules and displayed times |
 
-Job schedules are evaluated in the server's `TZ`. The time zone database is
-built into the binary, so `TZ` works in the minimal image.
+Job schedules are evaluated in the server's `TZ`, and so is every time the
+interface shows (browsers' own zones are not used, so a cron expression and the
+times around it always agree). The header of every page names the zone, for
+example `America/Chicago · CDT (UTC-05:00)`, and the schedule fields say which
+zone they are in. The time zone database is built into the binary, so `TZ`
+works in the minimal image. Set `TZ` to your own zone, as `UTC` is only the
+default.
+
+> **Upgrading from v0.9.0-beta.13 or earlier:** those builds read every cron
+> expression in UTC, whatever `TZ` was. From v0.9.0-beta.14 they are read in
+> `TZ`, as described above. A job set to `0 1 * * *` to run at 20:00 Central
+> now runs at 01:00 Central. Change each job's schedule to its local hour
+> (`0 20 * * *`) when you upgrade, and until you have, expect one run at the
+> old expression's local hour: the next run is counted from the last one.
 
 ## The data directory
 

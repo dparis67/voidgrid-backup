@@ -139,7 +139,7 @@
     <span class="muted">{{.User}}</span>
     <form method="post" action="/auth/logout"><button class="plain" type="submit">Sign out</button></form>
   </span>{{end}}
-  <span class="ver"{{if .User}} style="margin-left:0"{{end}}>{{.Version}}</span>
+  <span class="ver"{{if .User}} style="margin-left:0"{{end}} title="Every time and cron schedule in this interface is in the server's time zone (its TZ setting)">{{.TZ}} · {{.Version}}</span>
 </header>
 <main>
   {{if .Notice}}<div class="notice">{{.Notice}}</div>{{end}}
