@@ -132,8 +132,11 @@ message PhaseTimings {
   int64 prepare_ms = 2;     // policy and previous snapshots
   int64 upload_ms = 3;      // reading the source and writing it, including any freeze
   int64 retention_ms = 4;   // applying the keep rules
-  int64 commit_ms = 5;      // flushing the last blobs and the index
+  int64 commit_ms = 5;      // save + flush + close together (all that older agents report)
   int64 maintenance_ms = 6; // Kopia maintenance run after the backup
+  int64 save_ms = 7;        // writing the snapshot manifest
+  int64 flush_ms = 8;       // flushing the last pack blobs and the index to the repository
+  int64 close_ms = 9;       // closing the repository writer
 }
 
 message BackupResponse {

@@ -36,6 +36,9 @@ func main() {
 	agentListen := envflag.String("agent-listen", "VB_AGENT_LISTEN", ":9442", "TLS address agents register on")
 	data := envflag.String("data", "VB_DATA", "/data", "directory for the catalog and the CA")
 	poll := envflag.Duration("poll", "VB_POLL", 30*time.Second, "how often to check agents")
+	cacheDir := envflag.String("cache-dir", "VB_CACHE_DIR", "", "base directory for Kopia's local cache of repositories the server maintains, one subdirectory per repository; empty keeps it in the data directory")
+	cacheMetadataMB := envflag.Int("cache-metadata-mb", "VB_CACHE_METADATA_MB", 256, "size limit in MiB, per repository, of the metadata cache")
+	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the file-data cache; 0 turns the whole cache off")
 	oidcIssuer := envflag.String("oidc-issuer", "VB_OIDC_ISSUER", "", "OIDC provider issuer URL; empty disables login and leaves every route open")
 	oidcClientID := envflag.String("oidc-client-id", "VB_OIDC_CLIENT_ID", "", "OIDC client ID")
 	oidcClientSecret := envflag.String("oidc-client-secret", "VB_OIDC_CLIENT_SECRET", "", "OIDC client secret")
@@ -74,7 +77,8 @@ func main() {
 	// stderr (docker logs) is unchanged.
 	logs := logbuf.New(2000)
 	slog.SetDefault(slog.New(logs.Handler(logbuf.NewStderrHandler(os.Stderr, slog.LevelInfo))))
-	if err := run(*listen, *agentListen, *data, *poll, oidcCfg, logs); err != nil {
+	cache := engine.CacheConfig{Dir: *cacheDir, MetadataBytes: int64(*cacheMetadataMB) << 20, ContentBytes: int64(*cacheContentMB) << 20}
+	if err := run(*listen, *agentListen, *data, *poll, oidcCfg, cache, logs); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -114,7 +118,7 @@ func readToken(data string) (string, error) {
 	return enroll.Format(secret, cert.Raw), nil
 }
 
-func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.Config, logs *logbuf.Buffer) error {
+func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.Config, cache engine.CacheConfig, logs *logbuf.Buffer) error {
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		return err
 	}
@@ -143,6 +147,9 @@ func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.C
 	eng, err := engine.New(filepath.Join(data, "kopia"), server.EngineHost)
 	if err != nil {
 		return fmt.Errorf("repository engine: %w", err)
+	}
+	if err := eng.SetCache(cache); err != nil {
+		return fmt.Errorf("repository cache: %w", err)
 	}
 	ctrl := &server.Controller{Engine: eng, Catalog: cat, CA: ca, ClientCert: clientCert, RegistryCert: registryCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
 

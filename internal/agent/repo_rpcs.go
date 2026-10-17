@@ -95,7 +95,10 @@ func toPathResult(res engine.PathResult) *agentpb.PathResult {
 			PrepareMs:     res.Timings.Prepare.Milliseconds(),
 			UploadMs:      res.Timings.Upload.Milliseconds(),
 			RetentionMs:   res.Timings.Retention.Milliseconds(),
-			CommitMs:      res.Timings.Commit.Milliseconds(),
+			CommitMs:      res.Timings.Commit().Milliseconds(),
+			SaveMs:        res.Timings.Save.Milliseconds(),
+			FlushMs:       res.Timings.Flush.Milliseconds(),
+			CloseMs:       res.Timings.Close.Milliseconds(),
 			MaintenanceMs: res.Timings.Maintenance.Milliseconds(),
 		},
 	}

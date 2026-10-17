@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -84,9 +85,14 @@ type Timings struct {
 	Prepare     time.Duration // policy and previous snapshots
 	Upload      time.Duration // reading and writing the source, including any freeze
 	Retention   time.Duration // applying the keep rules
-	Commit      time.Duration // flushing the last blobs and the index
+	Save        time.Duration // writing the snapshot manifest
+	Flush       time.Duration // flushing the last pack blobs and the index to the repository
+	Close       time.Duration // closing the repository writer
 	Maintenance time.Duration // Kopia maintenance after the backup
 }
+
+// Commit is Save, Flush and Close together: everything after the retention step.
+func (t Timings) Commit() time.Duration { return t.Save + t.Flush + t.Close }
 
 type Snapshot struct {
 	ID         string
@@ -122,6 +128,85 @@ type Engine struct {
 	// Recovery mode (the standalone restore tool): never write.
 	readOnly bool
 	uid      int
+	cache    CacheConfig
+}
+
+// CacheConfig is Kopia's local cache for each repository the engine opens.
+// Without one every run downloads the repository's index and the previous
+// snapshot's directories again, over the network.
+type CacheConfig struct {
+	// Dir is the base directory: each repository gets a subdirectory of it.
+	// Empty keeps the cache under the engine directory, with the repository's
+	// connection config.
+	Dir string
+	// MetadataBytes caps the cache of directories, manifests and metadata packs
+	// (what an incremental backup needs).
+	MetadataBytes int64
+	// ContentBytes caps the cache of file data (restores and checks read it).
+	// Zero turns the whole cache off: Kopia ignores its settings then.
+	ContentBytes int64
+}
+
+// DefaultCache is deliberately small; a host with room says so with SetCache.
+func DefaultCache() CacheConfig {
+	return CacheConfig{MetadataBytes: 256 << 20, ContentBytes: 64 << 20}
+}
+
+// SetCache sets the cache every repository opened from now on gets, and
+// creates its base directory. Repositories connected earlier are updated the
+// next time they are opened.
+func (e *Engine) SetCache(c CacheConfig) error {
+	if c.Dir != "" {
+		abs, err := filepath.Abs(c.Dir)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(abs, 0o700); err != nil {
+			return fmt.Errorf("cache directory: %w", err)
+		}
+		c.Dir = abs
+	}
+	e.cache = c
+	return nil
+}
+
+// cachingFor is the Kopia caching options for the repository whose connection
+// directory is repoDir. The two sizes are also hard limits: Kopia keeps
+// entries younger than its sweep age (a day for metadata) past a soft size, so
+// without a hard limit the cache could grow well beyond what was asked for.
+func (e *Engine) cachingFor(repoDir string) content.CachingOptions {
+	if e.cache.ContentBytes <= 0 {
+		return content.CachingOptions{} // caching off
+	}
+	dir := filepath.Join(repoDir, "cache")
+	if e.cache.Dir != "" {
+		dir = filepath.Join(e.cache.Dir, filepath.Base(repoDir))
+	}
+	return content.CachingOptions{
+		CacheDirectory:              dir,
+		ContentCacheSizeBytes:       e.cache.ContentBytes,
+		ContentCacheSizeLimitBytes:  e.cache.ContentBytes,
+		MetadataCacheSizeBytes:      e.cache.MetadataBytes,
+		MetadataCacheSizeLimitBytes: e.cache.MetadataBytes,
+	}
+}
+
+// syncCaching makes the connection's saved config use want. The config is
+// local to this host (nothing is written to the repository), and a repository
+// connected before the cache settings existed has an empty one.
+func syncCaching(ctx context.Context, cfgFile string, want content.CachingOptions) error {
+	cur, err := repo.GetCachingOptions(ctx, cfgFile)
+	if err != nil {
+		return err
+	}
+	if cur.CacheDirectory == want.CacheDirectory &&
+		cur.ContentCacheSizeBytes == want.ContentCacheSizeBytes &&
+		cur.ContentCacheSizeLimitBytes == want.ContentCacheSizeLimitBytes &&
+		cur.MetadataCacheSizeBytes == want.MetadataCacheSizeBytes &&
+		cur.MetadataCacheSizeLimitBytes == want.MetadataCacheSizeLimitBytes {
+		return nil
+	}
+	return repo.SetCachingOptions(ctx, cfgFile, &want)
 }
 
 func New(dir, hostname string) (*Engine, error) {
@@ -132,7 +217,7 @@ func New(dir, hostname string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{dir: abs, hostname: hostname, uid: os.Geteuid()}
+	e := &Engine{dir: abs, hostname: hostname, uid: os.Geteuid(), cache: DefaultCache()}
 	if c, err := caps.Current(); err == nil {
 		e.canChown = c.Has(caps.Chown) && c.Has(caps.FOwner)
 	}
@@ -240,75 +325,97 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 		around = func(fn func() error) error { return fn() }
 	}
 	sessionStart := time.Now()
-	res.Err = repo.WriteSession(ctx, rep, repo.WriteSessionOptions{Purpose: "voidgrid-backup:backup"},
-		func(ctx context.Context, w repo.RepositoryWriter) error {
-			pol := &policy.Policy{
-				RetentionPolicy: policy.RetentionPolicy{
-					KeepLatest:  optInt(keep.Latest),
-					KeepHourly:  optInt(keep.Hourly),
-					KeepDaily:   optInt(keep.Daily),
-					KeepWeekly:  optInt(keep.Weekly),
-					KeepMonthly: optInt(keep.Monthly),
-					KeepAnnual:  optInt(keep.Annual),
-				},
-				FilesPolicy:       policy.FilesPolicy{IgnoreRules: rules},
-				CompressionPolicy: policy.CompressionPolicy{CompressorName: "zstd"},
-			}
-			if err := policy.SetPolicy(ctx, w, si, pol); err != nil {
-				return fmt.Errorf("set policy: %w", err)
-			}
-			tree, err := policy.TreeForSource(ctx, w, si)
-			if err != nil {
-				return err
-			}
-			prev, err := snapshot.FindPreviousManifests(ctx, w, si, nil)
-			if err != nil {
-				return err
-			}
-			var man *snapshot.Manifest
-			if err := around(func() error {
-				var err error
-				man, err = upload.NewUploader(w).Upload(ctx, entry, tree, si, prev...)
-				return err
-			}); err != nil {
-				return fmt.Errorf("upload: %w", err)
-			}
-			id, err := snapshot.SaveSnapshot(ctx, w, man)
-			if err != nil {
-				return fmt.Errorf("save snapshot: %w", err)
-			}
-			res.SnapshotID = string(id)
-			res.Bytes = man.Stats.TotalFileSize
-			res.Files = int(man.Stats.TotalFileCount)
-			res.Errors = int(man.Stats.ErrorCount)
-			res.Start, res.End = man.StartTime.ToTime().Unix(), man.EndTime.ToTime().Unix()
-			res.Incomplete = man.IncompleteReason
-			if man.RootEntry != nil && man.RootEntry.DirSummary != nil {
-				failed := man.RootEntry.DirSummary.FailedEntries
-				for i, fe := range failed {
-					if i == 5 {
-						res.Warnings = append(res.Warnings, fmt.Sprintf("... and %d more unreadable entries", res.Errors-5))
-						break
-					}
-					res.Warnings = append(res.Warnings, "could not read "+fe.EntryPath+": "+fe.Error)
-				}
-			}
-			deleted, err := policy.ApplyRetentionPolicy(ctx, w, si, true)
-			if err != nil {
-				return fmt.Errorf("apply retention: %w", err)
-			}
-			res.Pruned = len(deleted)
-			for _, d := range deleted {
-				res.PrunedIDs = append(res.PrunedIDs, string(d))
-			}
-			return nil
+	body := func(ctx context.Context, w repo.RepositoryWriter) error {
+		pol := &policy.Policy{
+			RetentionPolicy: policy.RetentionPolicy{
+				KeepLatest:  optInt(keep.Latest),
+				KeepHourly:  optInt(keep.Hourly),
+				KeepDaily:   optInt(keep.Daily),
+				KeepWeekly:  optInt(keep.Weekly),
+				KeepMonthly: optInt(keep.Monthly),
+				KeepAnnual:  optInt(keep.Annual),
+			},
+			FilesPolicy:       policy.FilesPolicy{IgnoreRules: rules},
+			CompressionPolicy: policy.CompressionPolicy{CompressorName: "zstd"},
+		}
+		if err := policy.SetPolicy(ctx, w, si, pol); err != nil {
+			return fmt.Errorf("set policy: %w", err)
+		}
+		tree, err := policy.TreeForSource(ctx, w, si)
+		if err != nil {
+			return err
+		}
+		prev, err := snapshot.FindPreviousManifests(ctx, w, si, nil)
+		if err != nil {
+			return err
+		}
+		res.Timings.Prepare = time.Since(sessionStart)
+		var man *snapshot.Manifest
+		uploadStart := time.Now()
+		err = around(func() error {
+			var err error
+			man, err = upload.NewUploader(w).Upload(ctx, entry, tree, si, prev...)
+			return err
 		})
-	// What the session spent beyond the measured steps is the commit: Kopia
-	// flushes the last pack blobs and the index when the session closes.
-	t := &res.Timings
-	if rest := time.Since(sessionStart) - t.Prepare - t.Upload - t.Retention; rest > 0 {
-		t.Commit = rest
+		res.Timings.Upload = time.Since(uploadStart)
+		if err != nil {
+			return fmt.Errorf("upload: %w", err)
+		}
+		saveStart := time.Now()
+		id, err := snapshot.SaveSnapshot(ctx, w, man)
+		res.Timings.Save = time.Since(saveStart)
+		if err != nil {
+			return fmt.Errorf("save snapshot: %w", err)
+		}
+		res.SnapshotID = string(id)
+		res.Bytes = man.Stats.TotalFileSize
+		res.Files = int(man.Stats.TotalFileCount)
+		res.CachedFiles = int(man.Stats.CachedFiles)
+		res.Errors = int(man.Stats.ErrorCount)
+		res.Start, res.End = man.StartTime.ToTime().Unix(), man.EndTime.ToTime().Unix()
+		res.Incomplete = man.IncompleteReason
+		if man.RootEntry != nil && man.RootEntry.DirSummary != nil {
+			failed := man.RootEntry.DirSummary.FailedEntries
+			for i, fe := range failed {
+				if i == 5 {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("... and %d more unreadable entries", res.Errors-5))
+					break
+				}
+				res.Warnings = append(res.Warnings, "could not read "+fe.EntryPath+": "+fe.Error)
+			}
+		}
+		retentionStart := time.Now()
+		deleted, err := policy.ApplyRetentionPolicy(ctx, w, si, true)
+		res.Timings.Retention = time.Since(retentionStart)
+		if err != nil {
+			return fmt.Errorf("apply retention: %w", err)
+		}
+		res.Pruned = len(deleted)
+		for _, d := range deleted {
+			res.PrunedIDs = append(res.PrunedIDs, string(d))
+		}
+		return nil
 	}
+	// This is repo.WriteSession, opened up so the flush and the close are timed
+	// apart: flush the writer if the body succeeded, always close it.
+	ctx, w, err := rep.NewWriter(ctx, repo.WriteSessionOptions{Purpose: "voidgrid-backup:backup"})
+	if err != nil {
+		res.Err = fmt.Errorf("unable to create writer: %w", err)
+		return res
+	}
+	res.Err = body(ctx, w)
+	if res.Err == nil {
+		flushStart := time.Now()
+		if err := w.Flush(ctx); err != nil {
+			res.Err = fmt.Errorf("error flushing writer: %w", err)
+		}
+		res.Timings.Flush = time.Since(flushStart)
+	}
+	closeStart := time.Now()
+	if err := w.Close(ctx); err != nil {
+		slog.Error("closing the repository writer", "err", err)
+	}
+	res.Timings.Close = time.Since(closeStart)
 	return res
 }
 
@@ -561,7 +668,7 @@ func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
 		}
 		err = repo.Connect(ctx, cfgFile, st, r.Password, &repo.ConnectOptions{
 			ClientOptions:  repo.ClientOptions{Hostname: e.hostname, Username: Username, ReadOnly: e.readOnly},
-			CachingOptions: content.CachingOptions{CacheDirectory: filepath.Join(dir, "cache")},
+			CachingOptions: e.cachingFor(dir),
 		})
 		st.Close(ctx)
 		if err != nil {
@@ -569,6 +676,9 @@ func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
 		}
 	} else if err != nil {
 		return nil, err
+	}
+	if err := syncCaching(ctx, cfgFile, e.cachingFor(dir)); err != nil {
+		return nil, fmt.Errorf("set up the repository cache: %w", err)
 	}
 	rep, err := repo.Open(ctx, cfgFile, r.Password, &repo.Options{})
 	if err != nil {

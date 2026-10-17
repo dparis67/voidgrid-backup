@@ -35,6 +35,9 @@ services:
       # Agent identity (key, certificates) and Kopia cache. Keep it: losing it
       # means registering the agent again.
       - ./data:/data
+      # Optional: a fast disk for Kopia's cache. Uncomment, change the host
+      # path, and set VB_CACHE_DIR=/cache in .env.
+      # - /path/to/fast/disk:/cache
       - ${DOCKER_SOCKET}:/var/run/docker.sock
       - ${LIBVIRT_SOCKET}:/var/run/libvirt/libvirt-sock
       # Backup sources: same path as on the host, read-only.

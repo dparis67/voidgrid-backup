@@ -189,6 +189,9 @@ func (a *Agent) finishEnrollment(id string, certDER, caDER []byte) error {
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)
 	}
+	if err := eng.SetCache(a.cache); err != nil {
+		return fmt.Errorf("create engine: %w", err)
+	}
 	// agent.crt last: its presence is what marks the agent enrolled.
 	if err := pki.WriteCert(a.path(fileCA), caDER); err != nil {
 		return fmt.Errorf("save CA: %w", err)

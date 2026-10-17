@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -30,4 +31,18 @@ func Duration(name, env string, def time.Duration, usage string) *time.Duration 
 		def = d
 	}
 	return flag.Duration(name, def, usage+" [$"+env+"]")
+}
+
+// Int registers an int flag defaulting to $env when set, else def. An
+// unparsable $env is a startup error rather than a silent fallback.
+func Int(name, env string, def int, usage string) *int {
+	if v, ok := os.LookupEnv(env); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
+			os.Exit(2)
+		}
+		def = n
+	}
+	return flag.Int(name, def, usage+" [$"+env+"]")
 }

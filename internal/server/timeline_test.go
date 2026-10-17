@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
 
 func TestBuildTimeline(t *testing.T) {
@@ -381,5 +382,25 @@ func TestDismissConversionAndUTCServer(t *testing.T) {
 	}
 	if _, _, err := c.ConvertSchedules(ctx, nil, time.Now()); !errors.Is(err, ErrAlreadyConverted) {
 		t.Fatalf("convert after dismiss: %v", err)
+	}
+}
+
+func TestPhaseSummary(t *testing.T) {
+	ms := func(d time.Duration) int64 { return d.Milliseconds() }
+	got := phaseSummary(&agentpb.PhaseTimings{
+		OpenMs: ms(19 * time.Second), UploadMs: ms(40 * time.Second), SaveMs: ms(2 * time.Second),
+		FlushMs: ms(3 * time.Minute), CloseMs: 200, MaintenanceMs: ms(8 * time.Second),
+		CommitMs: ms(3*time.Minute + 2*time.Second), // the sum an agent sends alongside the parts
+	})
+	if want := " (open 19s, upload 40s, save 2s, flush 3m0s, maintenance 8s)"; got != want {
+		t.Errorf("phaseSummary = %q, want %q", got, want)
+	}
+	// An agent from before the split sends only the commit total.
+	old := phaseSummary(&agentpb.PhaseTimings{OpenMs: ms(11 * time.Second), CommitMs: ms(105 * time.Second)})
+	if want := " (open 11s, commit 1m45s)"; old != want {
+		t.Errorf("old-agent summary = %q, want %q", old, want)
+	}
+	if got := phaseSummary(&agentpb.PhaseTimings{OpenMs: 400}); got != "" {
+		t.Errorf("a fast run should add nothing, got %q", got)
 	}
 }

@@ -41,6 +41,9 @@ command line wins over the environment.
 | `-oidc-redirect-url` | `VB_OIDC_REDIRECT_URL` | | Callback URL exactly as registered with the provider, e.g. `https://backup.example.com/auth/callback` |
 | `-oidc-allowed-emails` | `VB_OIDC_ALLOWED_EMAILS` | (empty) | Comma-separated allowlist. Empty allows any identity the provider authenticates |
 | | `TZ` | `UTC` | Time zone for schedules and displayed times |
+| `-cache-dir` | `VB_CACHE_DIR` | | Base directory for Kopia's local cache of the repositories the server maintains itself, one subdirectory per repository. Empty keeps it under `-data`. |
+| `-cache-metadata-mb` | `VB_CACHE_METADATA_MB` | `256` | Size limit in MiB, per repository, of the metadata cache |
+| `-cache-content-mb` | `VB_CACHE_CONTENT_MB` | `64` | Size limit in MiB, per repository, of the file-data cache. `0` turns the whole cache off. |
 
 Job schedules are evaluated in the server's `TZ`, and so is every time the
 interface shows (browsers' own zones are not used, so a cron expression and the

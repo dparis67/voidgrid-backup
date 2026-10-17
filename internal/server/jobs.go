@@ -392,6 +392,9 @@ func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 		tm.UploadMs += t.GetUploadMs()
 		tm.RetentionMs += t.GetRetentionMs()
 		tm.CommitMs += t.GetCommitMs()
+		tm.SaveMs += t.GetSaveMs()
+		tm.FlushMs += t.GetFlushMs()
+		tm.CloseMs += t.GetCloseMs()
 		tm.MaintenanceMs += t.GetMaintenanceMs()
 		if r.GetError() != "" {
 			failed++
@@ -692,16 +695,26 @@ func shortID(id string) string {
 }
 
 // phaseSummary renders where a backup spent its time, ", open 3s, upload 40s,
-// ...", leaving out phases that took under a second. "" if none did.
+// ...", leaving out phases that took under a second. "" if none did. An agent
+// that predates the finer split reports only "commit" (save, flush and close
+// together), which is shown when the three are all absent.
 func phaseSummary(t *agentpb.PhaseTimings) string {
 	var parts []string
-	for _, ph := range []struct {
+	phases := []struct {
 		name string
 		ms   int64
 	}{
 		{"open", t.GetOpenMs()}, {"prepare", t.GetPrepareMs()}, {"upload", t.GetUploadMs()},
-		{"retention", t.GetRetentionMs()}, {"commit", t.GetCommitMs()}, {"maintenance", t.GetMaintenanceMs()},
-	} {
+		{"retention", t.GetRetentionMs()}, {"save", t.GetSaveMs()}, {"flush", t.GetFlushMs()},
+		{"close", t.GetCloseMs()}, {"maintenance", t.GetMaintenanceMs()},
+	}
+	if t.GetSaveMs()+t.GetFlushMs()+t.GetCloseMs() == 0 {
+		phases = append(phases, struct {
+			name string
+			ms   int64
+		}{"commit", t.GetCommitMs()})
+	}
+	for _, ph := range phases {
 		if ph.ms >= 1000 {
 			parts = append(parts, ph.name+" "+(time.Duration(ph.ms)*time.Millisecond).Round(time.Second).String())
 		}

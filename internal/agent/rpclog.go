@@ -68,7 +68,7 @@ func logBackupResult(res *agentpb.PathResult, repo, took string) {
 			"changed_files", res.GetFiles(), "cached_files", res.GetCachedFiles(), "total_bytes", res.GetBytes(),
 			"unreadable", res.GetErrors(), "pruned", res.GetPruned(), "incomplete", res.GetIncomplete(),
 			"open", ms(t.GetOpenMs()), "prepare", ms(t.GetPrepareMs()), "upload", ms(t.GetUploadMs()),
-			"retention", ms(t.GetRetentionMs()), "commit", ms(t.GetCommitMs()), "maintenance", ms(t.GetMaintenanceMs()),
+			"retention", ms(t.GetRetentionMs()), "save", ms(t.GetSaveMs()), "flush", ms(t.GetFlushMs()), "close", ms(t.GetCloseMs()), "maintenance", ms(t.GetMaintenanceMs()),
 			"took", took)
 	}
 	for _, w := range res.GetWarnings() {

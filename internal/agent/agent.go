@@ -52,6 +52,7 @@ type Agent struct {
 	// is the server-assigned agent ID. Nothing reaches it before that, since
 	// Interceptor refuses every RPC until the agent is enrolled.
 	engine *engine.Engine
+	cache  engine.CacheConfig // applied to the engine now and when it is created at enrolment
 	// LogBuf, if set, holds this process's recent log lines for the Logs RPC.
 	LogBuf *logbuf.Buffer
 
@@ -78,12 +79,23 @@ type identity struct {
 
 // New loads the agent's state from dir, creating a key and a self-signed
 // certificate on first start.
+// SetCache sets Kopia's local cache for every repository this agent opens.
+func (a *Agent) SetCache(c engine.CacheConfig) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cache = c
+	if a.engine != nil {
+		return a.engine.SetCache(c)
+	}
+	return nil
+}
+
 func New(dir, dockerSocket string) (*Agent, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	host, _ := os.Hostname()
-	a := &Agent{dir: dir, hostname: host}
+	a := &Agent{dir: dir, hostname: host, cache: engine.DefaultCache()}
 	if dockerSocket != "" {
 		a.docker = docker.New(dockerSocket)
 	}

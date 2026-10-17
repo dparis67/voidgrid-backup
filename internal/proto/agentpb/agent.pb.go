@@ -512,8 +512,11 @@ type PhaseTimings struct {
 	PrepareMs     int64                  `protobuf:"varint,2,opt,name=prepare_ms,json=prepareMs,proto3" json:"prepare_ms,omitempty"`             // policy and previous snapshots
 	UploadMs      int64                  `protobuf:"varint,3,opt,name=upload_ms,json=uploadMs,proto3" json:"upload_ms,omitempty"`                // reading the source and writing it, including any freeze
 	RetentionMs   int64                  `protobuf:"varint,4,opt,name=retention_ms,json=retentionMs,proto3" json:"retention_ms,omitempty"`       // applying the keep rules
-	CommitMs      int64                  `protobuf:"varint,5,opt,name=commit_ms,json=commitMs,proto3" json:"commit_ms,omitempty"`                // flushing the last blobs and the index
+	CommitMs      int64                  `protobuf:"varint,5,opt,name=commit_ms,json=commitMs,proto3" json:"commit_ms,omitempty"`                // save + flush + close together (all that older agents report)
 	MaintenanceMs int64                  `protobuf:"varint,6,opt,name=maintenance_ms,json=maintenanceMs,proto3" json:"maintenance_ms,omitempty"` // Kopia maintenance run after the backup
+	SaveMs        int64                  `protobuf:"varint,7,opt,name=save_ms,json=saveMs,proto3" json:"save_ms,omitempty"`                      // writing the snapshot manifest
+	FlushMs       int64                  `protobuf:"varint,8,opt,name=flush_ms,json=flushMs,proto3" json:"flush_ms,omitempty"`                   // flushing the last pack blobs and the index to the repository
+	CloseMs       int64                  `protobuf:"varint,9,opt,name=close_ms,json=closeMs,proto3" json:"close_ms,omitempty"`                   // closing the repository writer
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -586,6 +589,27 @@ func (x *PhaseTimings) GetCommitMs() int64 {
 func (x *PhaseTimings) GetMaintenanceMs() int64 {
 	if x != nil {
 		return x.MaintenanceMs
+	}
+	return 0
+}
+
+func (x *PhaseTimings) GetSaveMs() int64 {
+	if x != nil {
+		return x.SaveMs
+	}
+	return 0
+}
+
+func (x *PhaseTimings) GetFlushMs() int64 {
+	if x != nil {
+		return x.FlushMs
+	}
+	return 0
+}
+
+func (x *PhaseTimings) GetCloseMs() int64 {
+	if x != nil {
+		return x.CloseMs
 	}
 	return 0
 }
@@ -3542,7 +3566,7 @@ const file_agent_proto_rawDesc = "" +
 	"\n" +
 	"pruned_ids\x18\f \x03(\tR\tprunedIds\x12?\n" +
 	"\atimings\x18\r \x01(\v2%.voidgridbackup.agent.v1.PhaseTimingsR\atimings\x12!\n" +
-	"\fcached_files\x18\x0e \x01(\x05R\vcachedFiles\"\xca\x01\n" +
+	"\fcached_files\x18\x0e \x01(\x05R\vcachedFiles\"\x99\x02\n" +
 	"\fPhaseTimings\x12\x17\n" +
 	"\aopen_ms\x18\x01 \x01(\x03R\x06openMs\x12\x1d\n" +
 	"\n" +
@@ -3550,7 +3574,10 @@ const file_agent_proto_rawDesc = "" +
 	"\tupload_ms\x18\x03 \x01(\x03R\buploadMs\x12!\n" +
 	"\fretention_ms\x18\x04 \x01(\x03R\vretentionMs\x12\x1b\n" +
 	"\tcommit_ms\x18\x05 \x01(\x03R\bcommitMs\x12%\n" +
-	"\x0emaintenance_ms\x18\x06 \x01(\x03R\rmaintenanceMs\"O\n" +
+	"\x0emaintenance_ms\x18\x06 \x01(\x03R\rmaintenanceMs\x12\x17\n" +
+	"\asave_ms\x18\a \x01(\x03R\x06saveMs\x12\x19\n" +
+	"\bflush_ms\x18\b \x01(\x03R\aflushMs\x12\x19\n" +
+	"\bclose_ms\x18\t \x01(\x03R\acloseMs\"O\n" +
 	"\x0eBackupResponse\x12=\n" +
 	"\aresults\x18\x01 \x03(\v2#.voidgridbackup.agent.v1.PathResultR\aresults\"q\n" +
 	"\x14ListSnapshotsRequest\x12C\n" +

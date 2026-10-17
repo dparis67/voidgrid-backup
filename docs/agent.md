@@ -29,13 +29,41 @@ command line wins over the environment.
 | `-token` | `VB_TOKEN` | | Registration token from the server. Needed until the agent is approved. |
 | `-listen` | `VB_LISTEN` | `:9443` | gRPC address the server connects to. In the example compose `VB_PORT` sets this and the published port together. |
 | `-health-listen` | `VB_HEALTH_LISTEN` | `127.0.0.1:9444` | HTTP `/healthz`; keep it on loopback. Empty disables it. |
-| `-data` | `VB_DATA` | `/data` | Agent key, certificates and Kopia cache |
+| `-data` | `VB_DATA` | `/data` | Agent key, certificates and, unless `VB_CACHE_DIR` is set, Kopia's local cache |
 | `-docker` | `VB_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker socket; empty disables stack backups |
 | `-libvirt-socket` | `VB_LIBVIRT_SOCKET` | `/var/run/libvirt/libvirt-sock` | libvirt socket; empty disables VM backups |
 | `-libvirt-uri` | `VB_LIBVIRT_URI` | `qemu:///system` | libvirt connection URI |
+| `-cache-dir` | `VB_CACHE_DIR` | | Base directory for Kopia's local cache, one subdirectory per repository. Empty keeps it under `-data`. See [Kopia's local cache](#kopias-local-cache). |
+| `-cache-metadata-mb` | `VB_CACHE_METADATA_MB` | `256` | Size limit, in MiB per repository, of the cache an incremental backup needs |
+| `-cache-content-mb` | `VB_CACHE_CONTENT_MB` | `64` | Size limit, in MiB per repository, of the cache of file data read back for restores and checks. `0` turns the whole cache off. |
 
 A socket that doesn't exist at start disables that feature with a warning in
 the log; the rest keeps working.
+
+## Kopia's local cache
+
+Kopia keeps a cache for each repository: the repository's index, the previous
+snapshot's directories (an incremental backup compares against them) and file
+data read back for restores and checks. Without it every run downloads that
+again, which over SFTP to a distant storage box is slow, because each request
+waits for a round trip. The cache holds the repository's blobs as they are
+stored there, so it is encrypted the same way, with integrity checks.
+
+- Each repository gets its own directory, `<cache dir>/<repository>-<connection>`.
+- Both limits are hard limits. Per repository the cache stays within about
+  the content limit plus the metadata limit, plus the repository's index blobs,
+  which are small. With three repositories and `1024` for both, that is a little
+  over 6 GiB.
+- `VB_CACHE_CONTENT_MB=0` turns the whole cache off (Kopia ignores the metadata
+  setting then).
+- Put `VB_CACHE_DIR` on a fast disk by mounting one into the container, for
+  example `/cache`, and pointing `VB_CACHE_DIR` at it. If the mount is missing
+  when the agent starts, the cache is created inside the container and is lost
+  when it is recreated; the log line `kopia cache` at startup shows where it is.
+- A changed setting takes effect the next time a repository is opened. The
+  settings are local to this host: nothing is written to the repository.
+- The cache of a repository whose connection details changed is left behind in
+  its old directory; delete it.
 
 ## Permissions
 

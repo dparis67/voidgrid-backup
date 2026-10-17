@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/voidgrid/voidgrid-backup/internal/agent"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/envflag"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
@@ -30,6 +32,8 @@ import (
 
 type config struct {
 	listen, healthListen, data              string
+	cacheDir                                string
+	cacheMetadataMB, cacheContentMB         int
 	server, token                           string
 	dockerSocket, libvirtSocket, libvirtURI string
 	logs                                    *logbuf.Buffer
@@ -44,6 +48,9 @@ func main() {
 	dockerSocket := envflag.String("docker", "VB_DOCKER_SOCKET", "/var/run/docker.sock", "Docker socket for stack backups; empty disables them")
 	libvirtSocket := envflag.String("libvirt-socket", "VB_LIBVIRT_SOCKET", "/var/run/libvirt/libvirt-sock", "libvirt socket for VM backups; empty disables them")
 	libvirtURI := envflag.String("libvirt-uri", "VB_LIBVIRT_URI", "qemu:///system", "libvirt connection URI")
+	cacheDir := envflag.String("cache-dir", "VB_CACHE_DIR", "", "base directory for Kopia's local cache, one subdirectory per repository; empty keeps it in the data directory")
+	cacheMetadataMB := envflag.Int("cache-metadata-mb", "VB_CACHE_METADATA_MB", 256, "size limit in MiB, per repository, of the cache an incremental backup needs (directories and metadata)")
+	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the cache of file data read back for restores and checks; 0 turns the whole cache off")
 
 	args := os.Args[1:]
 	healthcheck := len(args) > 0 && args[0] == "healthcheck"
@@ -52,7 +59,8 @@ func main() {
 	}
 	flag.CommandLine.Parse(args)
 	c := config{listen: *listen, healthListen: *healthListen, data: *data, server: *serverAddr, token: *token,
-		dockerSocket: *dockerSocket, libvirtSocket: *libvirtSocket, libvirtURI: *libvirtURI}
+		dockerSocket: *dockerSocket, libvirtSocket: *libvirtSocket, libvirtURI: *libvirtURI,
+		cacheDir: *cacheDir, cacheMetadataMB: *cacheMetadataMB, cacheContentMB: *cacheContentMB}
 	if healthcheck {
 		url, err := health.LocalURL(c.healthListen, "/healthz")
 		if err != nil {
@@ -81,6 +89,19 @@ func run(c config) error {
 	a, err := agent.New(c.data, c.dockerSocket)
 	if err != nil {
 		return err
+	}
+	cache := engine.CacheConfig{Dir: c.cacheDir, MetadataBytes: int64(c.cacheMetadataMB) << 20, ContentBytes: int64(c.cacheContentMB) << 20}
+	if err := a.SetCache(cache); err != nil {
+		return err
+	}
+	if c.cacheContentMB <= 0 {
+		slog.Warn("kopia cache is off: every run downloads the repository's index and directories again")
+	} else {
+		where := c.cacheDir
+		if where == "" {
+			where = filepath.Join(c.data, "kopia", "<repository>", "cache")
+		}
+		slog.Info("kopia cache", "dir", where, "metadata_mb", c.cacheMetadataMB, "content_mb", c.cacheContentMB)
 	}
 	if a.ID() == "" {
 		if c.server == "" || c.token == "" {
