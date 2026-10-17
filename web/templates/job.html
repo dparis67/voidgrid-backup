@@ -93,8 +93,9 @@
   <div class="card">
     <form class="grid" method="post" action="/jobs/{{$job.ID}}/delete">
       <label>Type <span class="mono">{{$job.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+      <label class="check wide"><input type="checkbox" name="snapshots" value="1"> Also delete its snapshots ({{len .Snapshots}} listed). This can't be undone: the data is released by the next maintenance cycle.</label>
       <div class="actions"><button class="danger" type="submit">Delete job and its run history</button>
-        <span class="hint">Snapshots stay in the repository.</span></div>
+        <span class="hint">Unchecked, the snapshots stay in the repository.</span></div>
     </form>
   </div>
   {{if or $job.Running .SnapBusy}}<div id="live" data-ids="job-head,job-runs,job-snaps" data-every="3000" hidden></div>{{end}}

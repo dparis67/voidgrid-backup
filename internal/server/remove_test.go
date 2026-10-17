@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 )
 
 // hasFormatBlob reports whether dir still holds a Kopia repository (its
@@ -202,5 +205,124 @@ func TestRemovalsNeedTheTypedName(t *testing.T) {
 	// With the right ID the snapshot goes.
 	if n := post("/jobs/"+job.ID+"/snapshots/"+snaps[0].ID+"/delete", url.Values{"confirm": {shortID(snaps[0].ID)}}); !strings.Contains(n, "Deleted snapshot") {
 		t.Fatalf("snapshot delete with the ID: %q", n)
+	}
+}
+
+// A second job on the same agent, repository and path sees the first job's
+// snapshots, so it shows what the repository really holds after a delete.
+func sameSourceJob(t *testing.T, c *Controller, job catalog.Job) catalog.Job {
+	t.Helper()
+	other, err := c.AddJob(context.Background(), JobInput{
+		Name: "docs-twin", AgentID: job.AgentID, RepositoryID: job.RepositoryID,
+		Paths: job.Paths, Keep: catalog.DefaultRetention,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return other
+}
+
+func TestDeleteJobSnapshotsAreOptional(t *testing.T) {
+	ctx := context.Background()
+	for _, withSnapshots := range []bool{false, true} {
+		c, job, _ := setupJob(t)
+		twin := sameSourceJob(t, c, job)
+		for i := 0; i < 2; i++ {
+			if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil {
+				t.Fatalf("backup %d: %+v %v", i, run, err)
+			}
+			time.Sleep(1100 * time.Millisecond)
+		}
+		n, err := c.DeleteJob(ctx, job.ID, withSnapshots)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Catalog.Job(ctx, job.ID); !errors.Is(err, catalog.ErrNotFound) {
+			t.Fatalf("withSnapshots=%v: the job is still there: %v", withSnapshots, err)
+		}
+		if err := c.RefreshSnapshots(ctx, twin.ID); err != nil {
+			t.Fatal(err)
+		}
+		listed, err := c.Snapshots(ctx, twin.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, wantN := 2, 0
+		if withSnapshots {
+			want, wantN = 0, 2
+		}
+		if len(listed) != want || n != wantN {
+			t.Errorf("withSnapshots=%v: forgot %d, repository lists %d; want %d and %d", withSnapshots, n, len(listed), wantN, want)
+		}
+	}
+}
+
+func TestDeleteJobRefusedWhileRunning(t *testing.T) {
+	c, job, _ := setupJob(t)
+	if !c.inflight.start(job.ID) {
+		t.Fatal("could not mark the job running")
+	}
+	defer c.inflight.done(job.ID)
+	if _, err := c.DeleteJob(context.Background(), job.ID, true); !errors.Is(err, ErrRunning) {
+		t.Fatalf("got %v, want ErrRunning", err)
+	}
+	if _, err := c.Catalog.Job(context.Background(), job.ID); err != nil {
+		t.Fatalf("a refused delete removed the job: %v", err)
+	}
+}
+
+func TestDefaultRepositoryAndDeleteFormsOnThePages(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	get := func(path string) string {
+		t.Helper()
+		resp, err := client.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return string(b)
+	}
+	post := func(path string, form url.Values) string {
+		t.Helper()
+		req, _ := http.NewRequest("POST", srv.URL+path, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.Request.URL.Query().Get("notice")
+	}
+
+	// The add-job form carries each agent's default, and makes the operator pick when there is none.
+	if body := get("/jobs"); !strings.Contains(body, "data-defaults=") || !strings.Contains(body, job.RepositoryID) || !strings.Contains(body, "Choose a repository") {
+		t.Errorf("the add-job form doesn't carry the defaults:\n%s", body)
+	}
+	// The Repositories page offers to change it, and the change is refused for an agent that isn't assigned.
+	if body := get("/repositories"); !strings.Contains(body, ">default<") {
+		t.Errorf("the Repositories page doesn't show the default")
+	}
+	if n := post("/repositories/"+job.RepositoryID+"/agents/nobody/default", nil); !strings.Contains(n, "Not changed") {
+		t.Errorf("default for an unassigned agent: %q", n)
+	}
+	if n := post("/repositories/"+job.RepositoryID+"/agents/"+job.AgentID+"/default", nil); !strings.Contains(n, "now what new jobs") {
+		t.Errorf("default for an assigned agent: %q", n)
+	}
+
+	// The job page offers the snapshots checkbox, and it is off unless ticked.
+	if body := get("/jobs/" + job.ID); !strings.Contains(body, `name="snapshots"`) || strings.Contains(body, `name="snapshots" value="1" checked`) {
+		t.Errorf("the delete form lacks an unticked snapshots checkbox")
+	}
+	if _, err := c.RunJob(ctx, job.ID, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	if n := post("/jobs/"+job.ID+"/delete", url.Values{"confirm": {job.Name}, "snapshots": {"1"}}); !strings.Contains(n, "and 1 snapshot(s)") {
+		t.Errorf("delete with snapshots: %q", n)
 	}
 }

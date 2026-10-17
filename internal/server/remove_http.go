@@ -142,6 +142,20 @@ func (u *ui) assignAgent(w http.ResponseWriter, r *http.Request) {
 	redirectNotice(w, r, "/repositories", msg)
 }
 
+// defaultRepository makes a repository the one new jobs on an agent start with.
+func (u *ui) defaultRepository(w http.ResponseWriter, r *http.Request) {
+	rp, err := u.c.Catalog.Repository(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := u.c.SetDefaultRepository(r.Context(), rp.ID, r.PathValue("agent")); err != nil {
+		redirectNotice(w, r, "/repositories", "Not changed: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, "/repositories", rp.Name+" is now what new jobs on that agent start with.")
+}
+
 func (u *ui) unassignAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	rp, err := u.c.Catalog.Repository(r.Context(), id)

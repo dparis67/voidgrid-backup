@@ -131,6 +131,44 @@ func (c *Controller) WipeError(ctx context.Context, repoID string) string {
 	return v
 }
 
+// DeleteJob removes a job and its run history. With snapshots, it first
+// forgets every snapshot in the job's recorded list, in one request to the
+// agent, and keeps the job if that fails. It returns how many snapshots were
+// forgotten. Their space is released by later full maintenance, and a snapshot
+// the list hasn't picked up yet (the list is refreshed after every backup) is
+// left in the repository.
+func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool) (int, error) {
+	if !c.inflight.start(jobID) {
+		return 0, ErrRunning
+	}
+	defer c.inflight.done(jobID)
+	n := 0
+	if snapshots {
+		job, repo, agent, err := c.jobContext(ctx, jobID)
+		if err != nil {
+			return 0, err
+		}
+		snaps, err := c.Catalog.ListSnapshots(ctx, jobID)
+		if err != nil {
+			return 0, err
+		}
+		ids := make([]string, 0, len(snaps))
+		for _, s := range snaps {
+			ids = append(ids, s.ID)
+		}
+		if len(ids) > 0 {
+			if _, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
+				return cl.DeleteSnapshot(ctx, &agentpb.DeleteSnapshotRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotIds: ids})
+			}); err != nil {
+				return 0, fmt.Errorf("delete snapshots on %s: %w", agent.Name, err)
+			}
+			n = len(ids)
+			slog.Warn("job snapshots deleted", "job", job.Name, "repo", repo.ID, "snapshots", n)
+		}
+	}
+	return n, c.Catalog.DeleteJob(ctx, jobID)
+}
+
 // DeleteSnapshot forgets one snapshot of a job. Its data is released only by
 // later full maintenance. The snapshot must be in the job's recorded list.
 func (c *Controller) DeleteSnapshot(ctx context.Context, jobID, snapshotID string) error {

@@ -290,6 +290,17 @@ histories and retention never touch each other.
   assigned only if that works; the same form re-tests an assigned agent. A job
   can only be created for an agent assigned to its repository. Existing
   installs were migrated so every agent that already had a job is assigned.
+- **Default repository.** Each agent has one default, which the add-job forms
+  preselect (agent → stacks or VMs, and Jobs → path job, which follows the
+  agent you pick). An agent's first repository becomes its default; change it
+  with **Make default** beside the agent. When an agent can use several
+  repositories and none is its default, the form asks you to choose.
+- **Maintenance when adding a job.** The add-job forms have "Maintenance of this
+  repository": leave it, or make the server or the job's agent the maintainer
+  (the same change as **Maintainer...** on the Repositories page). It is set
+  per repository, so it applies to every job on it, and it is refused while a
+  job on the repository is running; the job is created either way and the
+  notice says what happened.
 - **Keys.** An SFTP repository stores a default key file path; give an agent
   its own with **Key file on that agent**, and authorize each agent's public
   key for the same SFTP user (one `authorized_keys` line per agent, see
@@ -403,7 +414,10 @@ weekly/monthly/annual):
 
 A job page has "Back up now", "Verify repository", the schedule switch, run
 history and the snapshot list. Deleting a job removes it and its run history;
-its snapshots stay in the repository.
+its snapshots stay in the repository unless you tick **Also delete its
+snapshots**, which forgets every snapshot in the job's list first (and keeps the
+job if that fails). That cannot be undone, and the space is released by the next
+full maintenance cycle.
 
 **Verify repository** runs a check on demand: it confirms every snapshot's
 metadata and directory listings, that every content blob still exists, spot
@@ -497,12 +511,14 @@ job. The line marks now, and bars that have already started are dimmed.
   room (otherwise it is in the hover text). A
   run that began before the window and is still going at its left edge is
   drawn from the edge.
-- A job's length is the longest of its last 20 finished backups, not counting
-  the time a run waited for its agent (runs from before that was recorded
-  still include it). The first
-  backup is the longest by design, so it sets the reservation until later
-  runs are longer. A dashed bar has no finished backup yet and assumes 15
-  minutes.
+- A job's length is the median of its last 20 finished backups (the shorter
+  of the middle two for an even count), not counting the time a run waited for
+  its agent (runs from before that was recorded still include it). The first
+  backup uploads everything and is far longer than the rest, so a median lets
+  it stop mattering after a second or third run; hover a bar for the longest
+  run. A job with one finished backup uses it. A dashed bar has no finished
+  backup yet and assumes 15 minutes. Maintenance bars use the median of the
+  last 10 cycles the same way.
 - Jobs on one agent run one after another, so overlapping bars in an agent
   lane wait for each other. Jobs on one repository share its connections and
   bandwidth. Each job has its own row in its lane (jobs in name order, then

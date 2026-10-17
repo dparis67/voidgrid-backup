@@ -28,7 +28,7 @@
           <td class="num">{{.Jobs}}</td>
           <td>
             {{$r := .}}
-            {{range .Assigned}}<div>{{.Name}} {{if .Jobs}}<span class="muted">{{.Jobs}} job(s)</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/remove" style="display:inline"><button class="plain" type="submit">Unassign</button></form>{{end}}</div>{{else}}<span class="muted">none</span>{{end}}
+            {{range .Assigned}}<div>{{.Name}} {{if .Default}}<span class="muted" title="New jobs on this agent start with this repository">default</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/default" style="display:inline"><button class="plain" type="submit" title="Start new jobs on this agent with this repository">Make default</button></form>{{end}} {{if .Jobs}}<span class="muted">{{.Jobs}} job(s)</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/remove" style="display:inline"><button class="plain" type="submit">Unassign</button></form>{{end}}</div>{{else}}<span class="muted">none</span>{{end}}
             {{if and (gt (len .Assigned) 1) (eq .MaintBy "agent")}}<div class="hint">Shared by several agents: let the server maintain it (Maintainer…).</div>{{end}}
             {{if not .InitializedAt.IsZero}}
             <details>

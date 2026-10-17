@@ -296,6 +296,8 @@ func buildTimeline(rows []jobRow, maints []maintSlot, by string, now time.Time, 
 			tip := fmt.Sprintf("%s: %s to %s (%s)", r.Name, sl.start.Format("15:04"), sl.end.Format("15:04"), took(sl.start, sl.end))
 			if r.DurGuess {
 				tip += ", estimated: no finished backup yet"
+			} else if r.Longest > r.Dur {
+				tip += ", typical of its last runs; the longest was " + took(sl.start, sl.start.Add(r.Longest))
 			}
 			byLane[lane] = append(byLane[lane], placed{
 				bar: tlBar{JobID: r.ID, Name: r.Name, Left: left, Width: width, Start: sl.start.Format("15:04"),
@@ -318,6 +320,8 @@ func buildTimeline(rows []jobRow, maints []maintSlot, by string, now time.Time, 
 		tip := fmt.Sprintf("Maintenance of %s: %s to %s (%s)", m.Repo, m.Start.Format("15:04"), end.Format("15:04"), took(m.Start, end))
 		if m.Guess {
 			tip += ", estimated: no maintenance has finished yet"
+		} else if m.Longest > m.Dur {
+			tip += ", typical of its last cycles; the longest was " + took(m.Start, m.Start.Add(m.Longest))
 		}
 		byLane[lane] = append(byLane[lane], placed{
 			bar: tlBar{Name: "maintenance: " + m.Repo, Left: left, Width: width, Start: m.Start.Format("15:04"),

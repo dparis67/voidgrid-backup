@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 )
@@ -114,5 +115,35 @@ func TestMaintainRunsForTheOwner(t *testing.T) {
 	ran, owner, err = other.Maintain(ctx, r)
 	if err != nil || ran || !strings.HasSuffix(owner, "@host-a") {
 		t.Fatalf("non-owner: ran=%v owner=%q err=%v", ran, owner, err)
+	}
+}
+
+func TestDeleteSnapshotsBatch(t *testing.T) {
+	ctx := context.Background()
+	e, r, src, _ := removeFixture(t)
+	var ids []string
+	for i := 0; i < 2; i++ {
+		res, err := e.Backup(ctx, r, []string{src}, nil, Retention{Latest: 10})
+		if err != nil || res[0].Err != nil {
+			t.Fatalf("backup %d: %+v %v", i, res, err)
+		}
+		ids = append(ids, res[0].SnapshotID)
+		time.Sleep(1100 * time.Millisecond) // snapshots need distinct start times
+	}
+	// One bad ID refuses the whole batch and deletes nothing.
+	if err := e.DeleteSnapshots(ctx, r, []string{ids[0], "not-a-snapshot"}); err == nil {
+		t.Fatal("a batch with an unknown snapshot must be refused")
+	}
+	if snaps, _ := e.ListSnapshots(ctx, r, []string{src}); len(snaps) != 2 {
+		t.Fatalf("a refused batch deleted snapshots: %d left, want 2", len(snaps))
+	}
+	if err := e.DeleteSnapshots(ctx, r, ids); err != nil {
+		t.Fatal(err)
+	}
+	if snaps, err := e.ListSnapshots(ctx, r, []string{src}); err != nil || len(snaps) != 0 {
+		t.Fatalf("snapshots still listed: %+v %v", snaps, err)
+	}
+	if err := e.DeleteSnapshots(ctx, r, nil); err != nil {
+		t.Fatalf("an empty batch is nothing to do: %v", err)
 	}
 }

@@ -47,9 +47,13 @@ func NewHandler(c *Controller) http.Handler {
 		"bytes":     HumanBytes,
 		"short":     shortID,
 		"join":      strings.Join,
-		"child":     func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
-		"unixTime":  func(s int64) time.Time { return time.Unix(s, 0) },
-		"list":      func(s ...string) []string { return s },
+		"json": func(v any) string {
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+		"child":    func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
+		"unixTime": func(s int64) time.Time { return time.Unix(s, 0) },
+		"list":     func(s ...string) []string { return s },
 	}).ParseFS(web.FS, "templates/*.html"))}
 
 	mux := http.NewServeMux()
@@ -77,6 +81,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
 	mux.HandleFunc("POST /repositories/{id}/agents", u.assignAgent)
 	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/remove", u.unassignAgent)
+	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/default", u.defaultRepository)
 	mux.HandleFunc("POST /repositories/{id}/remove", u.removeRepository)
 	mux.HandleFunc("POST /repositories/{id}/wipe", u.wipeRepository)
 	mux.HandleFunc("GET /notifications", u.notifications)
@@ -313,7 +318,8 @@ type repoRow struct {
 // assignedAgent is an agent that may use a repository.
 type assignedAgent struct {
 	catalog.Agent
-	Jobs int // its jobs on the repository; the assignment can't be removed while any
+	Jobs    int  // its jobs on the repository; the assignment can't be removed while any
+	Default bool // new jobs on this agent start with this repository
 }
 
 type repositoriesPage struct {
@@ -375,9 +381,10 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 			}
 		}
 		ids, _ := u.c.Catalog.RepositoryAgents(ctx, rp.ID)
+		defaults, _ := u.c.Catalog.DefaultRepositories(ctx)
 		for _, a := range agents {
 			if slices.Contains(ids, a.ID) {
-				row.Assigned = append(row.Assigned, assignedAgent{Agent: a, Jobs: perAgent[a.ID]})
+				row.Assigned = append(row.Assigned, assignedAgent{Agent: a, Jobs: perAgent[a.ID], Default: defaults[a.ID] == rp.ID})
 			} else {
 				row.Unassigned = append(row.Unassigned, a)
 			}
@@ -494,6 +501,7 @@ type jobRow struct {
 	Running     bool
 	Clashes     []string      // other jobs it would run alongside in the next 24 h
 	Dur         time.Duration // how long a run is expected to take; see jobDuration
+	Longest     time.Duration // the longest of the runs Dur was taken from
 	DurGuess    bool          // Dur is a default: the job has no finished backup yet
 }
 
@@ -502,9 +510,15 @@ type jobsPage struct {
 	Jobs   []jobRow
 	Agents []catalog.Agent
 	Repos  []catalog.Repository
-	Form   url.Values
-	Sort   string // active sort column, "" for the stored order
-	Desc   bool
+	// RepoAgents maps a repository ID to the space-separated IDs of the agents
+	// that can take a job on it ("" when it has no assignments: any agent).
+	// Defaults maps an agent ID to its default repository ID. The add-job form
+	// uses them to offer and preselect the chosen agent's repositories.
+	RepoAgents map[string]string
+	Defaults   map[string]string
+	Form       url.Values
+	Sort       string // active sort column, "" for the stored order
+	Desc       bool
 	// ConvertOffer: schedules saved before beta.14 may still hold UTC hours.
 	ConvertOffer bool
 }
@@ -529,6 +543,12 @@ func (u *ui) renderJobs(w http.ResponseWriter, r *http.Request, code int, p jobs
 	for _, j := range jobs {
 		p.Jobs = append(p.Jobs, u.jobRow(ctx, j, p.Agents, p.Repos))
 	}
+	p.RepoAgents = map[string]string{}
+	for _, rp := range p.Repos {
+		ids, _ := u.c.Catalog.RepositoryAgents(ctx, rp.ID)
+		p.RepoAgents[rp.ID] = strings.Join(ids, " ")
+	}
+	p.Defaults, _ = u.c.Catalog.DefaultRepositories(ctx)
 	clashes := findClashes(p.Jobs, time.Now())
 	for i := range p.Jobs {
 		p.Jobs[i].Clashes = clashes[p.Jobs[i].ID]
@@ -566,7 +586,7 @@ func (u *ui) jobRow(ctx context.Context, j catalog.Job, agents []catalog.Agent, 
 	if last, err := u.c.Catalog.LastRun(ctx, j.ID, "backup"); err == nil {
 		row.Last = &last
 	}
-	row.Dur, row.DurGuess = u.c.jobDuration(ctx, j.ID)
+	row.Dur, row.Longest, row.DurGuess = u.c.jobDuration(ctx, j.ID)
 	if j.Enabled && j.Schedule != "" {
 		row.Next, _ = NextRun(ctx, u.c.Catalog, j)
 	}
@@ -600,7 +620,7 @@ func (u *ui) addJob(w http.ResponseWriter, r *http.Request) {
 		u.renderJobs(w, r, http.StatusBadRequest, p)
 		return
 	}
-	redirectNotice(w, r, "/jobs/"+job.ID, "Created job "+job.Name+".")
+	redirectNotice(w, r, "/jobs/"+job.ID, "Created job "+job.Name+"."+u.c.ApplyMaintainer(r.Context(), job, f.Get("maintainer")))
 }
 
 type jobPage struct {
@@ -784,12 +804,16 @@ func (u *ui) deleteJob(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/jobs/"+id, "Type the job name to confirm deletion.")
 		return
 	}
-	if u.c.IsRunning(id) {
+	n, err := u.c.DeleteJob(r.Context(), id, r.FormValue("snapshots") == "1")
+	switch {
+	case errors.Is(err, ErrRunning):
 		redirectNotice(w, r, "/jobs/"+id, "Wait for the running backup to finish before deleting.")
 		return
-	}
-	if err := u.c.Catalog.DeleteJob(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	case err != nil:
+		redirectNotice(w, r, "/jobs/"+id, "Not deleted: "+err.Error())
+		return
+	case r.FormValue("snapshots") == "1":
+		redirectNotice(w, r, "/jobs", fmt.Sprintf("Deleted job %s and %d snapshot(s). Their space is freed by a later maintenance run.", j.Name, n))
 		return
 	}
 	redirectNotice(w, r, "/jobs", "Deleted job "+j.Name+". Its snapshots are still in the repository.")

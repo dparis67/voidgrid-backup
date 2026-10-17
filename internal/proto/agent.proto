@@ -409,6 +409,9 @@ message LogsResponse {
 message DeleteSnapshotRequest {
   Repository repository = 1;
   string snapshot_id = 2;
+  // More snapshots to forget in the same request (one repository session for
+  // all of them). snapshot_id and these are both honoured.
+  repeated string snapshot_ids = 3;
 }
 
 message DeleteSnapshotResponse {}

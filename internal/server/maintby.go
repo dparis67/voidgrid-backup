@@ -158,6 +158,31 @@ func (c *Controller) SetMaintainer(ctx context.Context, repoID, who, agentID, se
 }
 
 // unimplementedHint turns "agent does not have this call" into advice.
+// ApplyMaintainer carries out the add-job form's choice of who maintains the
+// job's repository: "" leaves it, "server" or "agent" (the job's own agent)
+// sets it. The setting belongs to the repository, so it holds for every job on
+// it. It returns a sentence for the notice, "" when nothing was asked.
+func (c *Controller) ApplyMaintainer(ctx context.Context, job catalog.Job, choice string) string {
+	var who, agentID, name string
+	switch choice {
+	case "":
+		return ""
+	case MaintByServer:
+		who, name = MaintByServer, "the server"
+	case MaintByAgent:
+		who, agentID, name = MaintByAgent, job.AgentID, "its agent"
+		if a, err := c.Catalog.Agent(ctx, job.AgentID); err == nil {
+			name = a.Name
+		}
+	default:
+		return " Maintenance was not changed: unknown choice."
+	}
+	if _, err := c.SetMaintainer(ctx, job.RepositoryID, who, agentID, ""); err != nil {
+		return " Maintenance was not changed: " + err.Error()
+	}
+	return " Maintenance of the repository is now done by " + name + "."
+}
+
 func unimplementedHint(err error) error {
 	if status.Code(err) == codes.Unimplemented {
 		return errors.New("this agent is too old for that; update it to the same version as the server")

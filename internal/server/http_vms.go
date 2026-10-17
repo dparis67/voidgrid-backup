@@ -22,10 +22,11 @@ type vmView struct {
 
 type vmsPage struct {
 	base
-	Agent catalog.Agent
-	VMs   []vmView
-	Repos []catalog.Repository
-	Keep  catalog.Retention
+	Agent       catalog.Agent
+	VMs         []vmView
+	Repos       []catalog.Repository
+	DefaultRepo string // the repository to preselect, or "" to make the operator pick
+	Keep        catalog.Retention
 }
 
 func (u *ui) vms(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +41,7 @@ func (u *ui) vms(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.DefaultRepo = u.c.DefaultRepoFor(ctx, agent.ID, p.Repos)
 	jobs, _ := u.c.Catalog.ListJobs(ctx)
 	vms, err := u.c.VMs(ctx, agent.ID)
 	if err != nil {
@@ -81,7 +83,7 @@ func (u *ui) addVMJob(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		var job catalog.Job
 		if job, err = u.c.AddJob(r.Context(), in); err == nil {
-			redirectNotice(w, r, "/jobs/"+job.ID, "Created VM job "+job.Name+".")
+			redirectNotice(w, r, "/jobs/"+job.ID, "Created VM job "+job.Name+"."+u.c.ApplyMaintainer(r.Context(), job, f.Get("maintainer")))
 			return
 		}
 	}

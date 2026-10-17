@@ -41,7 +41,11 @@
       <input type="hidden" name="agent" value="{{$agent.ID}}">
       <input type="hidden" name="vm" value="{{.VM.Name}}">
       <label>Job name <input name="name" value="vm-{{.VM.Name}}" required></label>
-      <label>Repository <select name="repository">{{range $repos}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+      <label>Repository <select name="repository" required>{{if not $.DefaultRepo}}<option value="" selected disabled>Choose a repository…</option>{{end}}{{range $repos}}<option value="{{.ID}}" {{if eq .ID $.DefaultRepo}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Maintenance of this repository
+        <select name="maintainer"><option value="">Leave as it is</option><option value="server">The server</option><option value="agent">This job's agent</option></select>
+        <span class="hint">Set per repository, so it applies to every job on it. Refused while a job on the repository is running.</span>
+      </label>
       <fieldset>
         <legend>Disks</legend>
         {{range .VM.Disks}}{{if .Backupable}}

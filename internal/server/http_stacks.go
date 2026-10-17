@@ -46,10 +46,11 @@ type stackView struct {
 
 type stacksPage struct {
 	base
-	Agent  catalog.Agent
-	Stacks []stackView
-	Repos  []catalog.Repository
-	Keep   catalog.Retention
+	Agent       catalog.Agent
+	Stacks      []stackView
+	Repos       []catalog.Repository
+	DefaultRepo string // the repository to preselect, or "" to make the operator pick
+	Keep        catalog.Retention
 }
 
 func (u *ui) stacks(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +65,7 @@ func (u *ui) stacks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	p.DefaultRepo = u.c.DefaultRepoFor(ctx, agent.ID, p.Repos)
 	jobs, _ := u.c.Catalog.ListJobs(ctx)
 	stacks, err := u.c.Stacks(ctx, agent.ID)
 	if err != nil {
@@ -158,7 +160,7 @@ func (u *ui) addStackJob(w http.ResponseWriter, r *http.Request) {
 	if in.Keep, err = keepFromForm(f); err == nil {
 		var job catalog.Job
 		if job, err = u.c.AddJob(r.Context(), in); err == nil {
-			redirectNotice(w, r, "/jobs/"+job.ID, "Created stack job "+job.Name+".")
+			redirectNotice(w, r, "/jobs/"+job.ID, "Created stack job "+job.Name+"."+u.c.ApplyMaintainer(r.Context(), job, f.Get("maintainer")))
 			return
 		}
 	}

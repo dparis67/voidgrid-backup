@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -20,26 +21,42 @@ const (
 
 type slot struct{ start, end time.Time }
 
-// jobDuration is how long a run of the job is expected to take: the longest of
-// its last 20 finished backups (the first backup is the longest by design, and
-// later ones are incremental, so this is a safe upper bound), never under
-// overlapMin. A job with no finished backup yet gets overlapDefault and
-// guess=true.
-func (c *Controller) jobDuration(ctx context.Context, jobID string) (d time.Duration, guess bool) {
+// jobDuration is how long a run of the job is expected to take: the median of
+// its last 20 finished backups (for an even count, the shorter of the middle
+// two), never under overlapMin. The median is used because the first backup
+// uploads everything and is far longer than the incremental ones after it: a
+// maximum would let that one run set the job's length for the next 20. longest
+// is the longest of those runs, for the tooltip. A job with no finished backup
+// yet gets overlapDefault and guess=true.
+func (c *Controller) jobDuration(ctx context.Context, jobID string) (d, longest time.Duration, guess bool) {
 	runs, err := c.Catalog.ListRuns(ctx, jobID, 20)
 	if err != nil {
-		return overlapDefault, true
+		return overlapDefault, 0, true
 	}
+	var took []time.Duration
 	for _, r := range runs {
 		if r.Kind != "backup" || r.FinishedAt.IsZero() || (r.Status != catalog.RunSuccess && r.Status != catalog.RunPartial) {
 			continue
 		}
-		d = max(d, r.Took())
+		took = append(took, r.Took())
 	}
+	return typicalDuration(took)
+}
+
+// typicalDuration is the median of finished runs' lengths (the shorter middle
+// one for an even count) and the longest of them, never under overlapMin, or
+// overlapDefault with guess=true when there are none.
+func typicalDuration(took []time.Duration) (d, longest time.Duration, guess bool) {
+	if len(took) == 0 {
+		return overlapDefault, 0, true
+	}
+	slices.Sort(took)
+	longest = took[len(took)-1]
+	d = took[(len(took)-1)/2]
 	if d <= 0 {
-		return overlapDefault, true
+		return overlapDefault, 0, true
 	}
-	return max(d, overlapMin), false
+	return max(d, overlapMin), max(longest, overlapMin), false
 }
 
 // rowDur is the expected length of a job's run: its Dur when known, else the

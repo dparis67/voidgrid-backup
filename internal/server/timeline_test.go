@@ -70,13 +70,13 @@ func TestBuildTimeline(t *testing.T) {
 func TestJobDurationAndPage(t *testing.T) {
 	ctx := context.Background()
 	c, job, _ := setupJob(t)
-	if d, guess := c.jobDuration(ctx, job.ID); d != overlapDefault || !guess {
+	if d, _, guess := c.jobDuration(ctx, job.ID); d != overlapDefault || !guess {
 		t.Fatalf("before any backup: %v guess=%v", d, guess)
 	}
 	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunSuccess {
 		t.Fatalf("backup: %+v %v", run, err)
 	}
-	if d, guess := c.jobDuration(ctx, job.ID); guess || d < overlapMin {
+	if d, _, guess := c.jobDuration(ctx, job.ID); guess || d < overlapMin {
 		t.Fatalf("after a backup: %v guess=%v", d, guess)
 	}
 
@@ -442,16 +442,39 @@ func TestMaintDuration(t *testing.T) {
 	run := func(status string, took, queued time.Duration) catalog.MaintenanceRun {
 		return catalog.MaintenanceRun{Status: status, StartedAt: t0, FinishedAt: t0.Add(took + queued), Queued: queued}
 	}
-	if d, guess := maintDuration(nil); d != overlapDefault || !guess {
+	if d, _, guess := maintDuration(nil); d != overlapDefault || !guess {
 		t.Errorf("no history: %v %v, want the default as a guess", d, guess)
 	}
-	d, guess := maintDuration([]catalog.MaintenanceRun{
+	d, longest, guess := maintDuration([]catalog.MaintenanceRun{
 		run("ok", 20*time.Minute, 2*time.Hour), // the wait is not the work
 		run("failed", 5*time.Hour, 0),          // failures say nothing about a good run
 		run("ok", 8*time.Minute, 0),
 	})
-	if d != 20*time.Minute || guess {
-		t.Errorf("maintDuration = %v, %v, want 20m", d, guess)
+	// Of the two good cycles the typical one is the shorter, and the longest is kept for the tooltip.
+	if d != 8*time.Minute || longest != 20*time.Minute || guess {
+		t.Errorf("maintDuration = %v, %v, %v, want 8m, 20m", d, longest, guess)
+	}
+}
+
+func TestTypicalDuration(t *testing.T) {
+	m := time.Minute
+	for _, c := range []struct {
+		name          string
+		took          []time.Duration
+		want, longest time.Duration
+	}{
+		{"one cold run is all there is", []time.Duration{2 * time.Hour}, 2 * time.Hour, 2 * time.Hour},
+		{"a cold run and a warm one: the warm one", []time.Duration{2 * time.Hour, 7*m + 30*time.Second}, 7*m + 30*time.Second, 2 * time.Hour},
+		{"cold run among warm ones is ignored", []time.Duration{8 * m, 2 * time.Hour, 6 * m, 9 * m, 8 * m}, 8 * m, 2 * time.Hour},
+		{"short runs are raised to the minimum", []time.Duration{time.Second, 2 * time.Second, 3 * time.Second}, overlapMin, overlapMin},
+	} {
+		d, longest, guess := typicalDuration(c.took)
+		if d != c.want || longest != c.longest || guess {
+			t.Errorf("%s: %v, %v, %v, want %v, %v", c.name, d, longest, guess, c.want, c.longest)
+		}
+	}
+	if d, _, guess := typicalDuration(nil); d != overlapDefault || !guess {
+		t.Errorf("no runs: %v %v, want the default as a guess", d, guess)
 	}
 }
 

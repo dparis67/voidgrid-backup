@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"slices"
@@ -27,8 +28,8 @@ func TestRepositoryAgentsBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "0009") {
-			continue // the one under test
+		if strings.HasPrefix(e.Name(), "0009") || strings.HasPrefix(e.Name(), "0012") {
+			continue // the one under test, and the one that builds on it
 		}
 		b, _ := fs.ReadFile(migrations, "migrations/"+e.Name())
 		if _, err := db.Exec(string(b)); err != nil {
@@ -63,11 +64,31 @@ func TestRepositoryAgentsBackfill(t *testing.T) {
 	if got, _ := c.RepositoryAgents(ctx, "r2"); len(got) != 0 {
 		t.Fatalf("a repository without jobs got assignments: %v", got)
 	}
+	// Each agent has one repository, so that one is its default.
+	if d, err := c.DefaultRepositories(ctx); err != nil || d["a1"] != "r1" || d["a2"] != "r1" {
+		t.Fatalf("backfilled defaults: %v %v", d, err)
+	}
 	if err := c.AssignAgent(ctx, "r2", "a1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AssignAgent(ctx, "r2", "a1"); err != nil {
 		t.Fatalf("assigning twice: %v", err)
+	}
+	// A second repository does not take the default away.
+	if d, _ := c.DefaultRepositories(ctx); d["a1"] != "r1" {
+		t.Fatalf("a second assignment changed the default: %v", d)
+	}
+	if err := c.SetDefaultRepository(ctx, "a1", "r2"); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := c.DefaultRepositories(ctx); d["a1"] != "r2" || d["a2"] != "r1" {
+		t.Fatalf("after choosing r2 for a1: %v", d)
+	}
+	if err := c.SetDefaultRepository(ctx, "a2", "r2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("defaulting a repository the agent isn't assigned to: %v", err)
+	}
+	if d, _ := c.DefaultRepositories(ctx); d["a2"] != "r1" {
+		t.Fatalf("a refused change altered the default: %v", d)
 	}
 	if err := c.UnassignAgent(ctx, "r2", "a1"); err != nil {
 		t.Fatal(err)

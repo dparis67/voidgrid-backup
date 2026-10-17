@@ -2955,9 +2955,12 @@ func (x *LogsResponse) GetEntries() []*LogEntry {
 }
 
 type DeleteSnapshotRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Repository    *Repository            `protobuf:"bytes,1,opt,name=repository,proto3" json:"repository,omitempty"`
-	SnapshotId    string                 `protobuf:"bytes,2,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Repository *Repository            `protobuf:"bytes,1,opt,name=repository,proto3" json:"repository,omitempty"`
+	SnapshotId string                 `protobuf:"bytes,2,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	// More snapshots to forget in the same request (one repository session for
+	// all of them). snapshot_id and these are both honoured.
+	SnapshotIds   []string `protobuf:"bytes,3,rep,name=snapshot_ids,json=snapshotIds,proto3" json:"snapshot_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3004,6 +3007,13 @@ func (x *DeleteSnapshotRequest) GetSnapshotId() string {
 		return x.SnapshotId
 	}
 	return ""
+}
+
+func (x *DeleteSnapshotRequest) GetSnapshotIds() []string {
+	if x != nil {
+		return x.SnapshotIds
+	}
+	return nil
 }
 
 type DeleteSnapshotResponse struct {
@@ -3796,13 +3806,14 @@ const file_agent_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x14\n" +
 	"\x05attrs\x18\x05 \x01(\tR\x05attrs\"K\n" +
 	"\fLogsResponse\x12;\n" +
-	"\aentries\x18\x01 \x03(\v2!.voidgridbackup.agent.v1.LogEntryR\aentries\"}\n" +
+	"\aentries\x18\x01 \x03(\v2!.voidgridbackup.agent.v1.LogEntryR\aentries\"\xa0\x01\n" +
 	"\x15DeleteSnapshotRequest\x12C\n" +
 	"\n" +
 	"repository\x18\x01 \x01(\v2#.voidgridbackup.agent.v1.RepositoryR\n" +
 	"repository\x12\x1f\n" +
 	"\vsnapshot_id\x18\x02 \x01(\tR\n" +
-	"snapshotId\"\x18\n" +
+	"snapshotId\x12!\n" +
+	"\fsnapshot_ids\x18\x03 \x03(\tR\vsnapshotIds\"\x18\n" +
 	"\x16DeleteSnapshotResponse\"\\\n" +
 	"\x15WipeRepositoryRequest\x12C\n" +
 	"\n" +

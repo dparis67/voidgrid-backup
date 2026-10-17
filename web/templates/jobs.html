@@ -39,10 +39,15 @@
       <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
       <label>Schedule (cron in {{$.TZ}}) <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *"></label>
       <label>Agent
-        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        <select name="agent" id="job-agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
       </label>
       <label>Repository
-        <select name="repository">{{$sel := .Form.Get "repository"}}{{range .Repos}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        <select name="repository" id="job-repo" required data-defaults='{{json .Defaults}}'>{{$sel := .Form.Get "repository"}}<option value="" {{if not $sel}}selected{{end}} disabled>Choose a repository…</option>{{range .Repos}}<option value="{{.ID}}" data-agents="{{index $.RepoAgents .ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        <span class="hint">Only repositories the agent is assigned to are offered; its default is picked for you.</span>
+      </label>
+      <label class="wide">Maintenance of this repository
+        <select name="maintainer"><option value="">Leave as it is</option><option value="server">The server</option><option value="agent">This job's agent</option></select>
+        <span class="hint">Set per repository, so it applies to every job on it. Refused while a job on the repository is running.</span>
       </label>
       <label class="wide">Paths, one per line <textarea name="paths" required>{{.Form.Get "paths"}}</textarea></label>
       <div class="wide">
@@ -62,5 +67,32 @@
       <div class="actions"><button type="submit">Create job</button></div>
     </form>
   </div>
+  <script>
+  // Offer the chosen agent's repositories and start on its default. A choice
+  // already made (the form came back with an error) is kept while it is offered.
+  (function () {
+    var agent = document.getElementById("job-agent"), repo = document.getElementById("job-repo");
+    if (!agent || !repo) return;
+    var defaults = {};
+    try { defaults = JSON.parse(repo.dataset.defaults || "{}") || {}; } catch (e) {}
+    function offer(keep) {
+      var chosen = keep ? repo.value : "";
+      Array.prototype.forEach.call(repo.options, function (o) {
+        if (!o.value) return;
+        var ids = (o.dataset.agents || "").split(" ").filter(Boolean);
+        var ok = ids.length === 0 || ids.indexOf(agent.value) >= 0;
+        o.hidden = !ok; o.disabled = !ok;
+        if (!ok && o.value === chosen) chosen = "";
+      });
+      if (!chosen && defaults[agent.value]) {
+        var d = Array.prototype.find.call(repo.options, function (o) { return o.value === defaults[agent.value] && !o.disabled; });
+        if (d) chosen = d.value;
+      }
+      repo.value = chosen;
+    }
+    agent.addEventListener("change", function () { offer(false); });
+    offer(true);
+  })();
+  </script>
   {{end}}
 {{template "bottom" .}}{{end}}

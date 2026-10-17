@@ -14,8 +14,12 @@ func (a *Agent) DeleteSnapshot(ctx context.Context, req *agentpb.DeleteSnapshotR
 	}
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
-	logStarted("snapshot delete started", r.ID, "snapshot", req.GetSnapshotId())
-	if err := a.engine.DeleteSnapshot(ctx, r, req.GetSnapshotId()); err != nil {
+	ids := req.GetSnapshotIds()
+	if id := req.GetSnapshotId(); id != "" {
+		ids = append([]string{id}, ids...)
+	}
+	logStarted("snapshot delete started", r.ID, "snapshots", len(ids))
+	if err := a.engine.DeleteSnapshots(ctx, r, ids); err != nil {
 		return nil, err
 	}
 	return &agentpb.DeleteSnapshotResponse{}, nil

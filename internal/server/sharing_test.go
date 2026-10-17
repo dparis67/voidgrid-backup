@@ -86,3 +86,31 @@ func TestSharingARepository(t *testing.T) {
 		t.Fatalf("legacy assignment: %v", ids)
 	}
 }
+
+func TestDefaultRepoFor(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	repos, err := c.ReposFor(ctx, job.AgentID)
+	if err != nil || len(repos) != 1 {
+		t.Fatalf("repositories: %+v %v", repos, err)
+	}
+	if got := c.DefaultRepoFor(ctx, job.AgentID, repos); got != job.RepositoryID {
+		t.Fatalf("an agent with one repository: default %q, want %q", got, job.RepositoryID)
+	}
+	// A second repository the agent can use, with no choice made: the form must ask.
+	two := append(repos, catalog.Repository{ID: "other"})
+	if err := c.Catalog.SetDefaultRepository(ctx, job.AgentID, "other"); err == nil {
+		t.Fatal("a default the agent isn't assigned to must be refused")
+	}
+	// The assigned repository stays the default while another one is offered.
+	if got := c.DefaultRepoFor(ctx, job.AgentID, two); got != job.RepositoryID {
+		t.Fatalf("with a stored default: %q, want %q", got, job.RepositoryID)
+	}
+	// A stored default that isn't on offer (unassigned) falls back to asking.
+	if got := c.DefaultRepoFor(ctx, job.AgentID, two[1:]); got != "other" {
+		t.Fatalf("one offered repository is the default: %q", got)
+	}
+	if got := c.DefaultRepoFor(ctx, job.AgentID, append(two, catalog.Repository{ID: "third"})[1:]); got != "" {
+		t.Fatalf("several repositories and none stored: %q, want blank", got)
+	}
+}

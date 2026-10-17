@@ -22,23 +22,42 @@ import (
 // deleted. The data it referenced stays in storage until a later full
 // maintenance cycle garbage-collects it.
 func (e *Engine) DeleteSnapshot(ctx context.Context, r Repo, snapshotID string) error {
+	return e.DeleteSnapshots(ctx, r, []string{snapshotID})
+}
+
+// DeleteSnapshots forgets several snapshots in one repository session. Every
+// snapshot is checked to be this agent's own before any is deleted, so a
+// refusal leaves them all in place.
+func (e *Engine) DeleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string) error {
+	if len(snapshotIDs) == 0 {
+		return nil
+	}
 	rep, err := e.open(ctx, r)
 	if err != nil {
 		return err
 	}
 	defer rep.Close(ctx)
 
-	id := manifest.ID(snapshotID)
-	man, err := snapshot.LoadSnapshot(ctx, rep, id)
-	if err != nil {
-		return fmt.Errorf("load snapshot %s: %w", snapshotID, err)
-	}
-	if man.Source.Host != e.hostname || man.Source.UserName != Username {
-		return fmt.Errorf("snapshot %s belongs to %s@%s, not to this agent", snapshotID, man.Source.UserName, man.Source.Host)
+	ids := make([]manifest.ID, 0, len(snapshotIDs))
+	for _, sid := range snapshotIDs {
+		id := manifest.ID(sid)
+		man, err := snapshot.LoadSnapshot(ctx, rep, id)
+		if err != nil {
+			return fmt.Errorf("load snapshot %s: %w", sid, err)
+		}
+		if man.Source.Host != e.hostname || man.Source.UserName != Username {
+			return fmt.Errorf("snapshot %s belongs to %s@%s, not to this agent", sid, man.Source.UserName, man.Source.Host)
+		}
+		ids = append(ids, id)
 	}
 	return repo.WriteSession(ctx, rep, repo.WriteSessionOptions{Purpose: "voidgrid-backup:delete-snapshot"},
 		func(ctx context.Context, w repo.RepositoryWriter) error {
-			return w.DeleteManifest(ctx, id)
+			for _, id := range ids {
+				if err := w.DeleteManifest(ctx, id); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 }
 

@@ -124,3 +124,25 @@ func (c *Controller) ReposFor(ctx context.Context, agentID string) ([]catalog.Re
 	}
 	return out, nil
 }
+
+// DefaultRepoFor is the repository a new job on the agent starts with: the one
+// chosen for it, else the only one it can use. It is blank when the agent can
+// use several and none was chosen, so the form makes the operator pick.
+func (c *Controller) DefaultRepoFor(ctx context.Context, agentID string, repos []catalog.Repository) string {
+	if defaults, err := c.Catalog.DefaultRepositories(ctx); err == nil {
+		for _, r := range repos {
+			if r.ID == defaults[agentID] {
+				return r.ID
+			}
+		}
+	}
+	if len(repos) == 1 {
+		return repos[0].ID
+	}
+	return ""
+}
+
+// SetDefaultRepository chooses the repository new jobs on the agent start with.
+func (c *Controller) SetDefaultRepository(ctx context.Context, repoID, agentID string) error {
+	return c.Catalog.SetDefaultRepository(ctx, agentID, repoID)
+}

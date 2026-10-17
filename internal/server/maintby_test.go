@@ -118,3 +118,27 @@ func TestServerPathStaysOutOfFingerprint(t *testing.T) {
 		t.Fatal("a relative server path was accepted")
 	}
 }
+
+func TestApplyMaintainerFromTheAddJobForm(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	if got := c.ApplyMaintainer(ctx, job, ""); got != "" {
+		t.Fatalf("no choice must say nothing: %q", got)
+	}
+	if got := c.ApplyMaintainer(ctx, job, "agent"); !strings.Contains(got, "done by box") {
+		t.Fatalf("agent choice: %q", got)
+	}
+	if got := c.MaintainedBy(ctx, job.RepositoryID); got != MaintByAgent {
+		t.Fatalf("maintained by %q, want the agent", got)
+	}
+	// The server can't reach this filesystem repository, so the choice is refused and nothing changes.
+	if got := c.ApplyMaintainer(ctx, job, "server"); !strings.Contains(got, "Maintenance was not changed") {
+		t.Fatalf("server choice on an unreachable repository: %q", got)
+	}
+	if got := c.ApplyMaintainer(ctx, job, "nobody"); !strings.Contains(got, "not changed") {
+		t.Fatalf("unknown choice: %q", got)
+	}
+	if got := c.MaintainedBy(ctx, job.RepositoryID); got != MaintByAgent {
+		t.Fatalf("a refused choice changed the maintainer to %q", got)
+	}
+}
