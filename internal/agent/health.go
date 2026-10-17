@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
+	"log/slog"
 )
 
 // HealthStatus is what /healthz reports.
@@ -32,7 +35,9 @@ func (a *Agent) HealthHandler(grpcAddr string) http.Handler {
 		if !st.Healthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-		json.NewEncoder(w).Encode(st) //nolint:errcheck // status already sent; a failed write means the client went away
+		if err := json.NewEncoder(w).Encode(st); err != nil {
+			slog.Debug("health reply not delivered", "err", err) // the client went away
+		}
 	})
 	return mux
 }
@@ -48,8 +53,8 @@ func (a *Agent) Health(ctx context.Context, grpcAddr string) HealthStatus {
 	if f, err := os.CreateTemp(a.dir, ".health-*"); err != nil {
 		st.DataDir = err.Error()
 	} else {
-		f.Close()           //nolint:errcheck // writability probe; the file is deleted on the next line
-		os.Remove(f.Name()) //nolint:errcheck // best-effort cleanup of the probe file
+		tidy.Close(f)
+		tidy.Remove(f.Name())
 	}
 	if a.docker != nil {
 		st.Docker = "ok"

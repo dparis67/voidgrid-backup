@@ -37,6 +37,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 )
 
@@ -221,7 +222,7 @@ func openRepo(c repoFlags) (*engine.Engine, engine.Repo, func(), error) {
 		if err != nil {
 			return nil, engine.Repo{}, noop, err
 		}
-		cleanup = func() { os.RemoveAll(dir) } //nolint:errcheck // best-effort cleanup of a temporary directory
+		cleanup = func() { tidy.RemoveAll(dir) }
 	}
 	e, err := engine.New(dir, "recovery")
 	if err != nil {

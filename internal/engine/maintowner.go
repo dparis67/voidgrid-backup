@@ -22,7 +22,7 @@ func (e *Engine) MaintenanceOwner(ctx context.Context, r Repo) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer rep.Close(ctx) //nolint:errcheck // read-only use
+	defer rep.Close(ctx)
 	p, err := maintenance.GetParams(ctx, rep)
 	if err != nil {
 		return "", err
@@ -39,7 +39,7 @@ func (e *Engine) SetMaintenanceOwner(ctx context.Context, r Repo, owner string) 
 	if err != nil {
 		return err
 	}
-	defer rep.Close(ctx) //nolint:errcheck // the write below reports errors
+	defer rep.Close(ctx)
 	p, err := maintenance.GetParams(ctx, rep)
 	if err != nil {
 		return err

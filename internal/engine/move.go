@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // TestRepository connects to the repository's storage and opens it with its
@@ -219,7 +220,7 @@ func requireRepositoryAt(ctx context.Context, c repocfg.Config) error {
 	if err != nil {
 		return fmt.Errorf("open the current location: %w", err)
 	}
-	defer st.Close(ctx) //nolint:errcheck // read-only probe
+	defer st.Close(ctx)
 	if _, err := st.GetMetadata(ctx, format.KopiaRepositoryBlobID); errors.Is(err, blob.ErrBlobNotFound) {
 		return errors.New("no repository was found at the current location; nothing was moved")
 	} else if err != nil {
@@ -344,12 +345,12 @@ func dialSFTP(ctx context.Context, s repocfg.SFTP) (*pkgsftp.Client, func(), err
 		User: s.User, Auth: auth, HostKeyCallback: hostKey, Timeout: 30 * time.Second,
 	})
 	if err != nil {
-		conn.Close() //nolint:errcheck,gosec // already failing
+		conn.Close()
 		return nil, nil, fmt.Errorf("ssh to %s: %w", addr, err)
 	}
 	cli, err := pkgsftp.NewClient(ssh.NewClient(sc, chans, reqs))
 	if err != nil {
-		sc.Close() //nolint:errcheck,gosec // already failing
+		tidy.Close(sc)
 		return nil, nil, fmt.Errorf("start sftp on %s: %w", addr, err)
 	}
 	return cli, func() { _ = cli.Close(); _ = sc.Close() }, nil
@@ -362,9 +363,9 @@ func hostKeyCallback(data string) (ssh.HostKeyCallback, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(f.Name()) //nolint:errcheck // the content is not secret
+	defer tidy.Remove(f.Name())
 	if _, err := f.WriteString(data); err != nil {
-		f.Close() //nolint:errcheck,gosec // already failing
+		tidy.Close(f)
 		return nil, err
 	}
 	if err := f.Close(); err != nil {

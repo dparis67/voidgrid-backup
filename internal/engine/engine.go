@@ -35,6 +35,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/caps"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Username is the Kopia user recorded on every snapshot this tool takes.
@@ -619,7 +620,7 @@ func emptyOrMissing(dir string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close() //nolint:errcheck // read-only directory handle
+	defer tidy.Close(f)
 	names, err := f.Readdirnames(1)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return false, fmt.Errorf("restore target %s: %w", dir, err)

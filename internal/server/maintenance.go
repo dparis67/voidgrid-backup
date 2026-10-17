@@ -2,11 +2,12 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
+	"math/big"
 	"strings"
 	"time"
 
@@ -29,7 +30,11 @@ const (
 
 // maintRand returns a random duration in [0, max). Tests replace it.
 var maintRand = func(maxd time.Duration) time.Duration {
-	return rand.N(maxd) //nolint:gosec // G404: scheduling jitter, not security
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(maxd)))
+	if err != nil {
+		return 0 // no jitter this time: harmless
+	}
+	return time.Duration(n.Int64())
 }
 
 func repoMaintKey(repoID string) string    { return "repo_maint:" + repoID }

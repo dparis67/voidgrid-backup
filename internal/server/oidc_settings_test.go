@@ -248,3 +248,34 @@ func TestReloadAuthFallsBackWhenOIDCUnreachable(t *testing.T) {
 		t.Fatal("OIDCEnabled true despite discovery having failed")
 	}
 }
+
+// The client secret is stored apart from the rest of the OIDC config, and a
+// config saved before that (secret inside the JSON) still loads.
+func TestOIDCSecretStoredApartAndLegacyStillLoads(t *testing.T) {
+	ctx := context.Background()
+	c := newController(t)
+	issuerURL := startFakeIssuer(t)
+	cfg := webauth.Config{Issuer: issuerURL, ClientID: "id", ClientSecret: "s3cret", RedirectURL: "https://backup.example/auth/callback"}
+	if err := c.SetOIDCConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := c.Catalog.GetSetting(ctx, settingOIDC)
+	if err != nil || strings.Contains(raw, "s3cret") || strings.Contains(raw, "client_secret") {
+		t.Fatalf("the config JSON holds the secret: %q %v", raw, err)
+	}
+	if got, err := c.OIDCConfig(ctx); err != nil || got.ClientSecret != "s3cret" || got.ClientID != "id" {
+		t.Fatalf("round trip: %+v %v", got, err)
+	}
+
+	// An older server stored the secret inside the config JSON.
+	legacy := `{"issuer":"` + issuerURL + `","client_id":"id","client_secret":"old-secret","redirect_url":"https://backup.example/auth/callback"}`
+	if err := c.Catalog.SetSetting(ctx, settingOIDC, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.SetSetting(ctx, settingOIDCSecret, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := c.OIDCConfig(ctx); err != nil || got.ClientSecret != "old-secret" {
+		t.Fatalf("legacy config: %+v %v", got, err)
+	}
+}

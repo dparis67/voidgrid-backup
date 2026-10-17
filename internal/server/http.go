@@ -1,12 +1,15 @@
 package server
 
 import (
+	"io"
+
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"path"
@@ -54,7 +57,9 @@ func NewHandler(c *Controller) http.Handler {
 			http.Error(w, "catalog: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		fmt.Fprintln(w, "ok") //nolint:errcheck // status already sent; a failed write means the client went away
+		if _, err := io.WriteString(w, "ok\n"); err != nil {
+			slog.Debug("healthz reply not delivered", "err", err) // the client went away
+		}
 	})
 	mux.HandleFunc("GET /{$}", u.agents)
 	mux.HandleFunc("POST /agents/registrations/{id}/approve", u.approveRegistration)
@@ -159,7 +164,11 @@ func (u *ui) newBase(title, nav string, r *http.Request) base {
 	return b
 }
 
+// redirectNotice sends the browser to a path on this server, with notice (if
+// any) shown there. to is checked first, so no input can make this an
+// open redirect to another site.
 func redirectNotice(w http.ResponseWriter, r *http.Request, to, notice string) {
+	to = localPath(to)
 	if notice != "" {
 		sep := "?"
 		if strings.Contains(to, "?") {
@@ -167,7 +176,31 @@ func redirectNotice(w http.ResponseWriter, r *http.Request, to, notice string) {
 		}
 		to += sep + "notice=" + url.QueryEscape(notice)
 	}
-	http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // G710: callers pass local paths only
+	http.Redirect(w, r, to, http.StatusSeeOther)
+}
+
+// localPath returns p as a path on this server, or "/" when p is anything
+// else: it has a scheme or a host, or its path doesn't start with a single "/".
+// The result is rebuilt from the parsed path and query with every part
+// escaped, so it can only ever be a path and query on this server.
+func localPath(p string) string {
+	u, err := url.Parse(p)
+	if err != nil || u.Scheme != "" || u.Host != "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return "/"
+	}
+	var b strings.Builder
+	for _, seg := range strings.Split(u.Path[1:], "/") {
+		b.WriteString("/" + url.PathEscape(seg))
+	}
+	q := u.Query()
+	sep := "?"
+	for _, k := range slices.Sorted(maps.Keys(q)) {
+		for _, v := range q[k] {
+			b.WriteString(sep + url.QueryEscape(k) + "=" + url.QueryEscape(v))
+			sep = "&"
+		}
+	}
+	return b.String()
 }
 
 // Agents
@@ -813,11 +846,11 @@ func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
 	on := r.FormValue("on")
 	back := "/jobs/" + id + "/snapshots/" + sid + "?path=" + url.QueryEscape(rel) + onQuery(on)
 	if _, err := guard.RestoreTarget(target); err != nil {
-		http.Redirect(w, r, back+"&notice="+url.QueryEscape(err.Error()), http.StatusSeeOther) //nolint:gosec // G710: local path built from route segments
+		redirectNotice(w, r, back, err.Error())
 		return
 	}
 	if u.c.IsRunning(id) {
-		http.Redirect(w, r, back+"&notice="+url.QueryEscape(ErrRunning.Error()), http.StatusSeeOther) //nolint:gosec // G710: local path built from route segments
+		redirectNotice(w, r, back, ErrRunning.Error())
 		return
 	}
 	go func() {
@@ -877,8 +910,15 @@ func writeJSON[T any](w http.ResponseWriter, v []T, err error) {
 	if v == nil {
 		v = []T{}
 	}
+	replyJSON(w, v)
+}
+
+// replyJSON sends v as the JSON body of a 200 reply.
+func replyJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v) //nolint:errcheck // status already sent; a failed write means the client went away
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Debug("reply not delivered", "err", err) // the client went away
+	}
 }
 
 func whenStr(t time.Time) string {

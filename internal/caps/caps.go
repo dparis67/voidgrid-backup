@@ -9,6 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Capability bits (linux/capability.h).
@@ -47,7 +49,7 @@ func Current() (Report, error) {
 	if err != nil {
 		return Report{UID: os.Geteuid()}, err
 	}
-	defer f.Close() //nolint:errcheck // read-only file
+	defer tidy.Close(f)
 	r := Report{UID: os.Geteuid()}
 	found := false
 	sc := bufio.NewScanner(f)

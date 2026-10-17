@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"log/slog"
+
 	"context"
 	"io"
 	"io/fs"
@@ -8,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Compose labels Docker Compose puts on every container it creates.
@@ -130,7 +134,7 @@ func DetectDump(image string) string {
 // recognised by their header, not their name, so a ".db" can be either.
 func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) {
 	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck // the callback skips unreadable entries; a partial result is intended
+	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || len(sqlite) >= limit || len(duckdb) >= limit {
 			return filepath.SkipDir
 		}
@@ -151,6 +155,9 @@ func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) 
 		}
 		return nil
 	})
+	if walkErr != nil { // the callback only skips, so this is not expected
+		slog.Debug("looking for file databases", "root", root, "err", walkErr)
+	}
 	return sqlite, duckdb
 }
 
@@ -161,7 +168,7 @@ func fileDatabaseKind(p string) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close() //nolint:errcheck // read-only file
+	defer tidy.Close(f)
 	hdr := make([]byte, 16)
 	if n, _ := io.ReadFull(f, hdr); n < len(hdr) {
 		return ""

@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // ServerClientCN is the common name of the server's client certificate.
@@ -269,17 +271,17 @@ func WriteFileAtomic(path string, data []byte, mode fs.FileMode) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp) //nolint:errcheck // no-op after a successful rename; best-effort cleanup otherwise
+	defer tidy.Remove(tmp)
 	if err := f.Chmod(mode); err != nil {
-		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
+		tidy.Close(f)
 		return err
 	}
 	if _, err := f.Write(data); err != nil {
-		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
+		tidy.Close(f)
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close() //nolint:errcheck // already returning the earlier error; the deferred Remove cleans up
+		tidy.Close(f)
 		return err
 	}
 	if err := f.Close(); err != nil {

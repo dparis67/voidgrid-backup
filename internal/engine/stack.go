@@ -24,6 +24,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/docker"
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Quiesce modes for the stack's application containers while files are read.
@@ -406,12 +407,12 @@ func (e *Engine) ImportDump(ctx context.Context, r Repo, dk *docker.Client, snap
 	if err != nil {
 		return "", err
 	}
-	defer in.Close() //nolint:errcheck // reader; nothing to lose on close
+	defer tidy.Close(in)
 	rc, err := dk.Exec(ctx, svc.ContainerID, cmd, nil, in)
 	if err != nil {
 		return "", err
 	}
-	defer rc.Close() //nolint:errcheck // reader; nothing to lose on close
+	defer tidy.Close(rc)
 	var out tail
 	_, err = io.Copy(&out, rc)
 	return out.String(), err
@@ -431,7 +432,7 @@ func readStackManifest(ctx context.Context, root kfs.Entry) (StackManifest, erro
 	if err != nil {
 		return man, err
 	}
-	defer rd.Close() //nolint:errcheck // reader; nothing to lose on close
+	defer tidy.Close(rd)
 	if err := json.NewDecoder(io.LimitReader(rd, 1<<20)).Decode(&man); err != nil {
 		return man, fmt.Errorf("stack manifest: %w", err)
 	}

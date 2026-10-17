@@ -19,6 +19,7 @@ import (
 	"github.com/kopia/kopia/snapshot"
 
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/virt"
 )
 
@@ -322,7 +323,7 @@ func readEntry(ctx context.Context, ent kfs.Entry, limit int64) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rd.Close() //nolint:errcheck // reader; nothing to lose on close
+	defer tidy.Close(rd)
 	return io.ReadAll(io.LimitReader(rd, limit))
 }
 

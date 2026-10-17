@@ -172,3 +172,26 @@ func TestMoveScheduleEndpoint(t *testing.T) {
 		t.Fatalf("simple schedule is not draggable:\n%s", body)
 	}
 }
+
+func TestLocalPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"/jobs/abc":                        "/jobs/abc",
+		"/jobs/abc/snapshots/s?path=a%2Fb": "/jobs/abc/snapshots/s?path=a%2Fb",
+		"/jobs?sort=name&dir=desc":         "/jobs?dir=desc&sort=name",
+		"/jobs?on=x&on=y":                  "/jobs?on=x&on=y",
+		"/x?notice=a+b%26c":                "/x?notice=a+b%26c",
+		"/":                                "/",
+		"":                                 "/",
+		"https://evil.example/x":           "/",
+		"//evil.example/x":                 "/",
+		"///evil.example":                  "/",
+		`/\evil.example`:                   "/%5Cevil.example", // escaped: a path segment, not a host
+		"evil.example/x":                   "/",
+		"javascript:alert(1)":              "/",
+		"/ok\n/x":                          "/",
+	} {
+		if got := localPath(in); got != want {
+			t.Errorf("localPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

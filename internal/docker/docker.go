@@ -17,6 +17,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
+	"log/slog"
 )
 
 type Client struct {
@@ -103,7 +106,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	if err != nil {
 		return fmt.Errorf("docker %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close() //nolint:errcheck // response body; nothing to lose on close
+	defer tidy.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotModified {
 		return nil // already paused/stopped/started
 	}
@@ -144,9 +147,13 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 
 	if stdin != nil {
 		go func() {
-			io.Copy(conn, stdin) //nolint:errcheck // a failed copy surfaces as the exec's own error on the read side
+			if _, err := io.Copy(conn, stdin); err != nil {
+				slog.Debug("docker exec: copying stdin", "err", err) // the exec reports its own failure on the read side
+			}
 			if cw, ok := conn.(interface{ CloseWrite() error }); ok {
-				cw.CloseWrite() //nolint:errcheck // half-close after stdin; the exec's result reports failures
+				if err := cw.CloseWrite(); err != nil {
+					slog.Debug("docker exec: closing stdin", "err", err)
+				}
 			}
 		}()
 	}

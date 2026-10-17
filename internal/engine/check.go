@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -14,6 +13,8 @@ import (
 	"github.com/kopia/kopia/repo/blob"
 	"github.com/kopia/kopia/snapshot"
 	"github.com/kopia/kopia/snapshot/snapshotfs"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // CheckOptions controls a repository check.
@@ -85,7 +86,15 @@ func (e *Engine) Check(ctx context.Context, r Repo, opt CheckOptions) (CheckResu
 			if err != nil {
 				return err
 			}
-			tw.Process(ctx, root, fmt.Sprintf("%v@%v", m.Source, m.StartTime.ToTime().Format(time.RFC3339))) //nolint:errcheck,gosec // counted in the result
+			name := fmt.Sprintf("%v@%v", m.Source, m.StartTime.ToTime().Format(time.RFC3339))
+			if err := tw.Process(ctx, root, name); err != nil {
+				// Errors found while walking are already counted by the
+				// walker; only a refusal before the walk starts (an entry
+				// with no object ID) is news.
+				if _, n := tw.GetErrors(); n == 0 {
+					tw.ReportError(ctx, name, err)
+				}
+			}
 		}
 		return nil
 	})
@@ -134,7 +143,7 @@ func (e *Engine) testRestore(ctx context.Context, rep repo.Repository, mans []*s
 	what = fmt.Sprintf("%s snapshot %s (%d files, %d bytes)", pick.Source.Path, shortManifest(pick), pick.Stats.TotalFileCount, pick.Stats.TotalFileSize)
 
 	scratch := filepath.Join(e.dir, "test-restore-"+strconv.FormatInt(time.Now().UnixNano(), 36))
-	defer os.RemoveAll(scratch) //nolint:errcheck // best-effort cleanup of a scratch directory
+	defer tidy.RemoveAll(scratch)
 	root, err := snapshotfs.SnapshotRoot(rep, pick)
 	if err != nil {
 		return what, err.Error()

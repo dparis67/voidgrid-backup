@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -127,5 +126,5 @@ func (u *ui) apiUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		out.FSUsed, out.FSTotal, out.FSAvail = HumanBytes(pu.GetFsUsed()), HumanBytes(pu.GetFsTotal()), HumanBytes(pu.GetFsAvail())
 	}
-	json.NewEncoder(w).Encode(out) //nolint:errcheck // status already sent; a failed write means the client went away
+	replyJSON(w, out)
 }

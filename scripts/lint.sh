@@ -9,6 +9,11 @@
 # tree; bump it on purpose.
 set -eu
 cd "$(dirname "$0")/.."
+# Findings are fixed in the code, never silenced in place.
+if grep -rn --include='*.go' --exclude-dir=proto '//nolint' cmd internal; then
+  echo "lint: //nolint is not allowed; fix the finding instead" >&2
+  exit 1
+fi
 mkdir -p .cache/gopath .cache/gobuild .cache/golangci
 [ $# -gt 0 ] || set -- run
 exec docker run --rm \

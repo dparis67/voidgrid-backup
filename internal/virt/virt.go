@@ -113,19 +113,30 @@ func ParseDisks(domainXML string) ([]Disk, error) {
 	return out, nil
 }
 
+// escapeXML escapes s for XML text or an attribute value. xml.EscapeText fails
+// only when its writer does and a strings.Builder never does, so an error here
+// is a bug in this package, not something a caller could handle.
+func escapeXML(s string) string {
+	var b strings.Builder
+	if err := xml.EscapeText(&b, []byte(s)); err != nil {
+		panic("virt: escaping into a strings.Builder: " + err.Error())
+	}
+	return b.String()
+}
+
 // SnapshotXML describes an external disk-only snapshot: each disk in
 // overlays gets a new overlay file, every other disk is left alone.
 func SnapshotXML(name string, all []Disk, overlays map[string]string) string {
 	var b strings.Builder
 	b.WriteString("<domainsnapshot><name>")
-	xml.EscapeText(&b, []byte(name)) //nolint:errcheck // writes to a buffer, which never fails
+	b.WriteString(escapeXML(name))
 	b.WriteString("</name><description>voidgrid-backup</description><disks>")
 	for _, d := range all {
 		b.WriteString(`<disk name="`)
-		xml.EscapeText(&b, []byte(d.Target)) //nolint:errcheck // writes to a buffer, which never fails
+		b.WriteString(escapeXML(d.Target))
 		if ov, ok := overlays[d.Target]; ok {
 			b.WriteString(`" snapshot="external"><driver type="qcow2"/><source file="`)
-			xml.EscapeText(&b, []byte(ov)) //nolint:errcheck // writes to a buffer, which never fails
+			b.WriteString(escapeXML(ov))
 			b.WriteString(`"/></disk>`)
 		} else {
 			b.WriteString(`" snapshot="no"/>`)

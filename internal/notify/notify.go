@@ -17,6 +17,8 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Config holds every channel's settings. All three are independently
@@ -160,7 +162,7 @@ func postJSON(ctx context.Context, url string, body any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close() //nolint:errcheck // response body; nothing to lose on close
+	defer tidy.Close(resp.Body)
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("%s: %s", url, resp.Status)
 	}
@@ -258,7 +260,7 @@ func sendEmail(c *EmailConfig, cfg Config, ev Event) error {
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
 		c.From, strings.Join(c.To, ", "), ev.title(), ev.body(cfg))
 	if _, err := w.Write([]byte(msg)); err != nil {
-		w.Close() //nolint:errcheck // already returning the write error
+		tidy.Close(w)
 		return fmt.Errorf("write body: %w", err)
 	}
 	if err := w.Close(); err != nil {

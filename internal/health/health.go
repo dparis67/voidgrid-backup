@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // LocalURL turns a listen address like ":8080" or "0.0.0.0:8080" into a
@@ -37,7 +39,7 @@ func Probe(url string) {
 		fmt.Fprintln(os.Stderr, "unhealthy:", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close() //nolint:errcheck // response body; nothing to lose on close
+	defer tidy.Close(resp.Body)
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	fmt.Println(strings.TrimSpace(string(body)))
 	if resp.StatusCode != http.StatusOK {

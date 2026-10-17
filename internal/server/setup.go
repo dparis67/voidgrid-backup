@@ -23,6 +23,7 @@ const (
 	settingSetupToken    = "setup_token"
 	settingRecoveryCodes = "recovery_codes"
 	settingOIDC          = "oidc"
+	settingOIDCSecret    = "oidc_secret" // the client secret, apart from the rest of the config
 	numRecoveryCodes     = 10
 )
 
@@ -40,6 +41,18 @@ func (c *Controller) OIDCConfig(ctx context.Context) (webauth.Config, error) {
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return webauth.Config{}, fmt.Errorf("stored OIDC settings: %w", err)
 	}
+	if cfg.ClientSecret, err = c.Catalog.GetSetting(ctx, settingOIDCSecret); err != nil {
+		return webauth.Config{}, err
+	}
+	if cfg.ClientSecret == "" {
+		// Saved before the secret had its own setting: it is still in the config.
+		var old struct {
+			ClientSecret string `json:"client_secret"`
+		}
+		if err := json.Unmarshal([]byte(raw), &old); err == nil {
+			cfg.ClientSecret = old.ClientSecret
+		}
+	}
 	return cfg, nil
 }
 
@@ -54,7 +67,11 @@ func (c *Controller) SetOIDCConfig(ctx context.Context, cfg webauth.Config) erro
 	if err != nil {
 		return err
 	}
-	b, err := json.Marshal(cfg) //nolint:gosec // G117: stored in the catalog by design, like repository passwords; never sent back to the browser
+	// The secret goes to its own setting; the config's JSON leaves it out.
+	if err := c.Catalog.SetSetting(ctx, settingOIDCSecret, cfg.ClientSecret); err != nil {
+		return err
+	}
+	b, err := json.Marshal(cfg)
 	if err != nil {
 		return err
 	}
