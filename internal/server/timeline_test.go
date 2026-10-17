@@ -662,3 +662,24 @@ func TestTimelineRowPerJob(t *testing.T) {
 		}
 	}
 }
+
+// The "then run maintenance" box sits on the same line as Back up now, in the
+// page's inline checkbox style: a label that is a grid would drop below the
+// button and push it out of line with the other buttons.
+func TestMaintainBoxIsInlineWithBackUpNow(t *testing.T) {
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	body := get(t, client, srv.URL+"/jobs/"+job.ID, `name="maintain"`)
+	i := strings.Index(body, `action="/jobs/`+job.ID+`/run"`)
+	if i < 0 {
+		t.Fatal("no run form on the job page")
+	}
+	form := body[i : i+strings.Index(body[i:], "</form>")]
+	for _, want := range []string{`class="row"`, `flex-wrap:nowrap`, `<label class="check"`, `Back up now`} {
+		if !strings.Contains(form, want) {
+			t.Errorf("the run form lacks %q:\n%s", want, form)
+		}
+	}
+}

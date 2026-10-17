@@ -151,6 +151,7 @@ func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.C
 	if err := eng.SetCache(cache); err != nil {
 		return fmt.Errorf("repository cache: %w", err)
 	}
+	cache.Log(filepath.Join(data, "kopia"))
 	ctrl := &server.Controller{Engine: eng, Catalog: cat, CA: ca, ClientCert: clientCert, RegistryCert: registryCert, SessionKey: key, FlagOIDCConfig: oidcCfg, LogBuf: logs}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

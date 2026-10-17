@@ -94,15 +94,7 @@ func run(c config) error {
 	if err := a.SetCache(cache); err != nil {
 		return err
 	}
-	if c.cacheContentMB <= 0 {
-		slog.Warn("kopia cache is off: every run downloads the repository's index and directories again")
-	} else {
-		where := c.cacheDir
-		if where == "" {
-			where = filepath.Join(c.data, "kopia", "<repository>", "cache")
-		}
-		slog.Info("kopia cache", "dir", where, "metadata_mb", c.cacheMetadataMB, "content_mb", c.cacheContentMB)
-	}
+	cache.Log(filepath.Join(c.data, "kopia"))
 	if a.ID() == "" {
 		if c.server == "" || c.token == "" {
 			return errors.New("this agent is not enrolled yet: set VB_SERVER (host:port of the server's agent registration listener) and VB_TOKEN (from the server's Agents page, or `voidgrid-backup-server token`)")

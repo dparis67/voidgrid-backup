@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kopia/kopia/repo"
@@ -156,5 +159,32 @@ func TestBackupRecordsEveryPhase(t *testing.T) {
 	res, err = e.Backup(ctx, r, []string{src}, nil, keepOne)
 	if err != nil || res[0].CachedFiles != 1 {
 		t.Fatalf("second backup: cached=%d %v", res[0].CachedFiles, err)
+	}
+}
+
+// The agent and the server both say, when they start, where the cache is and how
+// large it may be, or that it is off.
+func TestCacheConfigLog(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(old)
+
+	CacheConfig{Dir: "/cache", MetadataBytes: 1024 << 20, ContentBytes: 512 << 20}.Log("/data/kopia")
+	got := buf.String()
+	for _, want := range []string{"kopia cache", "dir=/cache", "metadata_mb=1024", "content_mb=512"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("log %q lacks %q", got, want)
+		}
+	}
+	buf.Reset()
+	CacheConfig{MetadataBytes: 256 << 20, ContentBytes: 64 << 20}.Log("/data/kopia")
+	if got := buf.String(); !strings.Contains(got, "dir=/data/kopia/<repository>/cache") {
+		t.Errorf("without a directory the cache is per repository under the engine's: %q", got)
+	}
+	buf.Reset()
+	CacheConfig{Dir: "/cache", MetadataBytes: 256 << 20}.Log("/data/kopia")
+	if got := buf.String(); !strings.Contains(got, "level=WARN") || !strings.Contains(got, "cache is off") {
+		t.Errorf("a cache with no content size is off, and the log should warn: %q", got)
 	}
 }

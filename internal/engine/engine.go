@@ -170,6 +170,21 @@ func (e *Engine) SetCache(c CacheConfig) error {
 	return nil
 }
 
+// Log says where the cache lives and how large each repository's may grow, or
+// warns that it is off. root is the directory the engine keeps its repository
+// connections in, where the cache goes when Dir is empty.
+func (c CacheConfig) Log(root string) {
+	if c.ContentBytes <= 0 {
+		slog.Warn("kopia cache is off: every run downloads the repository's index and directories again")
+		return
+	}
+	dir := c.Dir
+	if dir == "" {
+		dir = filepath.Join(root, "<repository>", "cache")
+	}
+	slog.Info("kopia cache", "dir", dir, "metadata_mb", c.MetadataBytes>>20, "content_mb", c.ContentBytes>>20)
+}
+
 // cachingFor is the Kopia caching options for the repository whose connection
 // directory is repoDir. The two sizes are also hard limits: Kopia keeps
 // entries younger than its sweep age (a day for metadata) past a soft size, so
