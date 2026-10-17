@@ -461,8 +461,15 @@ The line marks now, and bars that have already started are dimmed.
 - Jobs on one agent run one after another, so overlapping bars in an agent
   lane wait for each other. Jobs on one repository share its connections and
   bandwidth. Overlapping bars are stacked and drawn in the warning colour.
-- Manual and switched-off jobs are listed under the timeline. Schedules are
-  edited on the Jobs page; this page only shows them.
+- **Drag a bar sideways** to change when its job starts, in 5 minute steps.
+  The bar's job gets a new minute and hour in its cron schedule, and it
+  applies from the next scheduled start. This works for a schedule with one
+  start time a day (`0 20 * * *`, or limited to weekdays such as
+  `0 20 * * 1,3`); dragging past midnight moves the weekdays with it. Other
+  schedules (`*/15`, several hours, ranges, a day of the month, `@daily`) are
+  not draggable and are edited on the Jobs page. A drag made from a page that
+  is out of date is refused, so it can't overwrite a newer edit.
+- Manual and switched-off jobs are listed under the timeline.
 
 ### Notifications
 

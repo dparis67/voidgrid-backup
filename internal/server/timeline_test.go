@@ -2,7 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -81,4 +85,90 @@ func TestJobDurationAndPage(t *testing.T) {
 	}
 	get(t, client, srv.URL+"/schedule?by=repo", "local") // the repository's name labels the lane
 	get(t, client, srv.URL+"/schedule?by=nonsense", "By agent")
+}
+
+func TestShiftSchedule(t *testing.T) {
+	cases := []struct {
+		spec    string
+		minutes int
+		want    string
+	}{
+		{"0 20 * * *", 75, "15 21 * * *"},
+		{"0 20 * * *", -20, "40 19 * * *"},
+		{"30 23 * * *", 45, "15 0 * * *"},  // across midnight, every day
+		{"15 0 * * *", -30, "45 23 * * *"}, // and back
+		{"0 20 * * 1", 300, "0 1 * * 2"},   // Monday 20:00 + 5h is Tuesday
+		{"0 1 * * 0", -120, "0 23 * * 6"},  // Sunday 01:00 - 2h is Saturday
+		{"0 1 * * 7", -120, "0 23 * * 6"},  // 7 is Sunday too
+		{"0 3 * * 1,3,5", 1440, "0 3 * * 2,4,6"},
+		{"0 22 * * 6,0", 180, "0 1 * * 0,1"}, // the list wraps and is sorted
+		{"5 4 ? * *", 0, "5 4 * * *"},
+	}
+	for _, c := range cases {
+		got, err := shiftSchedule(c.spec, c.minutes)
+		if err != nil || got != c.want {
+			t.Errorf("shiftSchedule(%q, %d) = %q, %v; want %q", c.spec, c.minutes, got, err, c.want)
+		}
+	}
+	for _, spec := range []string{"", "@daily", "*/15 * * * *", "0 */6 * * *", "0 2,14 * * *", "0 3 1 * *", "0 3 * 6 *",
+		"0 3 * * 1-5", "0 3 * * mon", "60 3 * * *", "0 24 * * *", "CRON_TZ=UTC 0 3 * * *", "0 3 * *"} {
+		if movable(spec) {
+			t.Errorf("%q should not be movable", spec)
+		}
+		if _, err := shiftSchedule(spec, 10); !errors.Is(err, ErrNotMovable) {
+			t.Errorf("shiftSchedule(%q) error = %v, want ErrNotMovable", spec, err)
+		}
+	}
+}
+
+func TestMoveScheduleEndpoint(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	if err := c.SetSchedule(ctx, job.ID, "0 20 * * *"); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	move := func(was, minutes string) (int, string) {
+		resp, err := client.PostForm(srv.URL+"/jobs/"+job.ID+"/schedule/move", url.Values{"was": {was}, "minutes": {minutes}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, strings.TrimSpace(string(b))
+	}
+
+	if code, body := move("0 20 * * *", "90"); code != 200 || body != "30 21 * * *" {
+		t.Fatalf("move: %d %q", code, body)
+	}
+	if j, _ := c.Catalog.Job(ctx, job.ID); j.Schedule != "30 21 * * *" {
+		t.Fatalf("stored schedule %q", j.Schedule)
+	}
+	// A page drawn before that move must not overwrite it.
+	if code, _ := move("0 20 * * *", "30"); code != http.StatusConflict {
+		t.Fatalf("stale move: %d", code)
+	}
+	if code, _ := move("30 21 * * *", "banana"); code != http.StatusBadRequest {
+		t.Fatalf("bad minutes: %d", code)
+	}
+	if err := c.SetSchedule(ctx, job.ID, "0 */6 * * *"); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := move("0 */6 * * *", "30"); code != http.StatusConflict {
+		t.Fatalf("complex schedule: %d", code)
+	}
+	if j, _ := c.Catalog.Job(ctx, job.ID); j.Schedule != "0 */6 * * *" {
+		t.Fatalf("a refused move changed the schedule to %q", j.Schedule)
+	}
+	// The page marks simple schedules as draggable and leaves the others alone.
+	if err := c.SetSchedule(ctx, job.ID, "0 20 * * *"); err != nil {
+		t.Fatal(err)
+	}
+	get(t, client, srv.URL+"/schedule", `class="tl-bar`)
+	body := get(t, client, srv.URL+"/schedule", "tl-bar")
+	if !strings.Contains(body, ` movable"`) || !strings.Contains(body, `data-was="0 20 * * *"`) {
+		t.Fatalf("simple schedule is not draggable:\n%s", body)
+	}
 }

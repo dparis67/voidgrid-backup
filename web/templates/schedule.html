@@ -1,6 +1,7 @@
 {{define "schedule"}}{{template "top" .}}
   <h2>Schedule</h2>
-  <p class="hint">The next 24 hours. Each bar is a scheduled job, from its start time for as long as its backups take (the longest of its last 20, so the first backup counts; dashed means no backup has finished yet and 15 minutes is assumed). Jobs on one agent run one after another, so overlapping bars in an agent lane wait for each other; jobs on one repository share its connections and bandwidth. Edit a schedule on the <a href="/jobs">Jobs</a> page.</p>
+  <p class="hint">The next 24 hours. Each bar is a scheduled job, from its start time for as long as its backups take (the longest of its last 20, so the first backup counts; dashed means no backup has finished yet and 15 minutes is assumed). Jobs on one agent run one after another, so overlapping bars in an agent lane wait for each other; jobs on one repository share its connections and bandwidth. Drag a bar sideways to change when its job starts (in 5 minute steps); that works for a job with a single start time a day. Any other schedule is edited on the <a href="/jobs">Jobs</a> page.</p>
+  <p class="hint" id="tl-status" role="status"></p>
   <p>
     <a href="/schedule" {{if eq .By "agent"}}class="on"{{end}}>By agent</a> ·
     <a href="/schedule?by=repo" {{if eq .By "repo"}}class="on"{{end}}>By repository</a>
@@ -21,7 +22,7 @@
         <div class="tl-track" style="height:{{mul24 .Rows}}px">
           {{range $.Ticks}}<span class="tl-line" style="left:{{printf "%.3f" .Left}}%"></span>{{end}}
           <span class="tl-now" style="left:{{printf "%.3f" $.Now}}%"></span>
-          {{range .Bars}}<a class="tl-bar{{if .Clash}} clash{{end}}{{if .Guess}} guess{{end}}{{if .Past}} past{{end}}" href="/jobs/{{.JobID}}" title="{{.Tip}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;top:{{mul24 .Row}}px">{{.Name}}</a>{{end}}
+          {{range .Bars}}<a class="tl-bar{{if .Clash}} clash{{end}}{{if .Guess}} guess{{end}}{{if .Past}} past{{end}}{{if .Movable}} movable{{end}}" href="/jobs/{{.JobID}}" title="{{.Tip}}{{if .Movable}}. Drag to change its start time.{{end}}"{{if .Movable}} data-job="{{.JobID}}" data-was="{{.Was}}" data-name="{{.Name}}" data-start="{{.Start}}"{{end}} style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;top:{{mul24 .Row}}px">{{.Name}}</a>{{end}}
         </div>
       </div>
       {{end}}
@@ -31,4 +32,62 @@
   {{if .Unscheduled}}<p class="hint">Not on the timeline (manual or off): {{join .Unscheduled ", "}}.</p>{{end}}
   </div>
   <div id="live" data-ids="tl" data-every="60000" hidden></div>
+  <script>
+  // Drag a movable bar to change its job's time of day. The server shifts the
+  // job's cron schedule by the number of minutes dragged; the page is then
+  // fetched again to redraw. A drag shorter than a few pixels is a click.
+  (function () {
+    var STEP = 5, SLOP = 4;
+    var drag = null, status = document.getElementById("tl-status");
+    function say(msg) { status.textContent = msg; }
+    function clock(start, shift) {
+      var p = start.split(":"), t = (parseInt(p[0], 10) * 60 + parseInt(p[1], 10) + shift) % 1440;
+      t = (t + 1440) % 1440;
+      return ("0" + Math.floor(t / 60)).slice(-2) + ":" + ("0" + (t % 60)).slice(-2);
+    }
+    document.addEventListener("pointerdown", function (e) {
+      var bar = e.target.closest && e.target.closest(".tl-bar.movable");
+      if (!bar || e.button !== 0) return;
+      var track = bar.parentNode.getBoundingClientRect();
+      drag = { bar: bar, x: e.clientX, track: track, moved: false, shift: 0,
+               minPerPx: 1440 / track.width, left: bar.getBoundingClientRect().left - track.left,
+               width: bar.getBoundingClientRect().width };
+      bar.setPointerCapture(e.pointerId);
+    });
+    document.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < SLOP) return;
+      drag.moved = true;
+      // Stay inside the track, then snap to whole steps.
+      dx = Math.max(-drag.left, Math.min(drag.track.width - drag.left - drag.width, dx));
+      drag.shift = Math.round(dx * drag.minPerPx / STEP) * STEP;
+      drag.bar.style.transform = "translateX(" + (drag.shift / drag.minPerPx) + "px)";
+      drag.bar.classList.add("dragging");
+      say(drag.bar.dataset.name + ": " + drag.bar.dataset.start + " → " + clock(drag.bar.dataset.start, drag.shift));
+    });
+    function finish(e, cancelled) {
+      if (!drag) return;
+      var d = drag; drag = null;
+      d.bar.classList.remove("dragging");
+      if (!d.moved) return;
+      // The drag was not a click: don't follow the link.
+      d.bar.addEventListener("click", function (ev) { ev.preventDefault(); }, { once: true });
+      if (cancelled || d.shift === 0) { d.bar.style.transform = ""; say(""); return; }
+      var body = new URLSearchParams({ was: d.bar.dataset.was, minutes: d.shift });
+      fetch("/jobs/" + encodeURIComponent(d.bar.dataset.job) + "/schedule/move", { method: "POST", body: body, credentials: "same-origin" })
+        .then(function (r) { return r.text().then(function (t) { if (!r.ok) throw new Error(t.trim() || "status " + r.status); return t; }); })
+        .then(function (sched) { say(d.bar.dataset.name + " now starts at " + clock(d.bar.dataset.start, d.shift) + " (" + sched + "). It applies from its next scheduled start."); })
+        .catch(function (err) { say("Not moved: " + err.message); })
+        .then(function () { return fetch(location.pathname + location.search, { credentials: "same-origin" }); })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var fresh = new DOMParser().parseFromString(html, "text/html").getElementById("tl"), old = document.getElementById("tl");
+          if (fresh && old) old.replaceWith(fresh);
+        });
+    }
+    document.addEventListener("pointerup", function (e) { finish(e, false); });
+    document.addEventListener("pointercancel", function (e) { finish(e, true); });
+  })();
+  </script>
 {{template "bottom" .}}{{end}}

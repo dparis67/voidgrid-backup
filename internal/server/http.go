@@ -81,6 +81,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("GET /jobs/{id}", u.job)
 	mux.HandleFunc("POST /jobs/{id}/run", u.runJob)
 	mux.HandleFunc("POST /jobs/{id}/schedule", u.setSchedule)
+	mux.HandleFunc("POST /jobs/{id}/schedule/move", u.moveSchedule)
 	mux.HandleFunc("POST /jobs/{id}/check", u.checkJob)
 	mux.HandleFunc("POST /jobs/{id}/toggle", u.toggleJob)
 	mux.HandleFunc("POST /jobs/{id}/delete", u.deleteJob)

@@ -1,15 +1,20 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 )
 
 // The Schedule page: the next 24 hours as a timeline, one lane per agent or per
 // repository, with each scheduled job drawn from its start time for as long as
-// it is expected to run. It only shows; nothing here changes a schedule.
+// it is expected to run. A bar of a job with a simple daily schedule can be
+// dragged to another time (see shift.go); the rest only show.
 
 const (
 	timelineSpan = 24 * time.Hour
@@ -25,6 +30,8 @@ type tlBar struct {
 	Clash       bool // overlaps another bar in the same lane
 	Guess       bool // the duration is a default: no finished backup yet
 	Past        bool
+	Movable     bool   // the schedule is simple enough to move by dragging
+	Was         string // the schedule this bar was drawn from, sent back with a move
 }
 
 type tlLane struct {
@@ -45,6 +52,27 @@ type timelinePage struct {
 	Ticks       []tlTick
 	Now         float64 // the current time as a percent of the span
 	Unscheduled []string
+}
+
+// moveSchedule shifts a job's schedule by a number of minutes, from dragging
+// its bar. The reply is the new schedule as plain text; the page then redraws.
+func (u *ui) moveSchedule(w http.ResponseWriter, r *http.Request) {
+	minutes, err := strconv.Atoi(r.FormValue("minutes"))
+	if err != nil || minutes < -minutesPerDay || minutes > minutesPerDay {
+		http.Error(w, "minutes must be a number within a day", http.StatusBadRequest)
+		return
+	}
+	moved, err := u.c.MoveSchedule(r.Context(), r.PathValue("id"), r.FormValue("was"), minutes)
+	switch {
+	case errors.Is(err, catalog.ErrNotFound):
+		http.NotFound(w, r)
+	case errors.Is(err, ErrRunning), errors.Is(err, ErrScheduleChanged), errors.Is(err, ErrNotMovable):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case err != nil:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	default:
+		fmt.Fprint(w, moved)
+	}
 }
 
 func (u *ui) schedule(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +151,8 @@ func buildTimeline(rows []jobRow, by string, now time.Time) (lanes []tlLane, tic
 			}
 			byLane[lane] = append(byLane[lane], placed{
 				bar: tlBar{JobID: r.ID, Name: r.Name, Left: left, Width: width, Start: sl.start.Format("15:04"),
-					End: sl.end.Format("15:04"), Tip: tip, Guess: r.DurGuess, Past: sl.start.Before(now)},
+					End: sl.end.Format("15:04"), Tip: tip, Guess: r.DurGuess, Past: sl.start.Before(now),
+					Movable: movable(r.Schedule), Was: r.Schedule},
 				s: sl,
 			})
 		}
