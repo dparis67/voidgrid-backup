@@ -76,8 +76,8 @@
       if (cancelled || d.shift === 0) { d.bar.style.transform = ""; say(""); return; }
       var body = new URLSearchParams({ was: d.bar.dataset.was, minutes: d.shift });
       fetch("/jobs/" + encodeURIComponent(d.bar.dataset.job) + "/schedule/move", { method: "POST", body: body, credentials: "same-origin" })
-        .then(function (r) { return r.text().then(function (t) { if (!r.ok) throw new Error(t.trim() || "status " + r.status); return t; }); })
-        .then(function (sched) { say(d.bar.dataset.name + " now starts at " + clock(d.bar.dataset.start, d.shift) + " (" + sched + "). It applies from its next scheduled start."); })
+        .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t.trim() || "status " + r.status); }); })
+        .then(function () { say(d.bar.dataset.name + " now starts at " + clock(d.bar.dataset.start, d.shift) + ". It applies from its next scheduled start."); })
         .catch(function (err) { say("Not moved: " + err.message); })
         .then(function () { return fetch(location.pathname + location.search, { credentials: "same-origin" }); })
         .then(function (r) { return r.text(); })

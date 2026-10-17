@@ -55,14 +55,14 @@ type timelinePage struct {
 }
 
 // moveSchedule shifts a job's schedule by a number of minutes, from dragging
-// its bar. The reply is the new schedule as plain text; the page then redraws.
+// its bar. It replies 204; the page then redraws from the server.
 func (u *ui) moveSchedule(w http.ResponseWriter, r *http.Request) {
 	minutes, err := strconv.Atoi(r.FormValue("minutes"))
 	if err != nil || minutes < -minutesPerDay || minutes > minutesPerDay {
 		http.Error(w, "minutes must be a number within a day", http.StatusBadRequest)
 		return
 	}
-	moved, err := u.c.MoveSchedule(r.Context(), r.PathValue("id"), r.FormValue("was"), minutes)
+	_, err = u.c.MoveSchedule(r.Context(), r.PathValue("id"), r.FormValue("was"), minutes)
 	switch {
 	case errors.Is(err, catalog.ErrNotFound):
 		http.NotFound(w, r)
@@ -71,7 +71,7 @@ func (u *ui) moveSchedule(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	default:
-		fmt.Fprint(w, moved)
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

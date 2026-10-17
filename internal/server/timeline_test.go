@@ -130,7 +130,7 @@ func TestMoveScheduleEndpoint(t *testing.T) {
 	srv := httptest.NewServer(NewHandler(c))
 	defer srv.Close()
 	client := authedClient(t, c, srv)
-	move := func(was, minutes string) (int, string) {
+	move := func(was, minutes string) (int, string) { // status and body
 		resp, err := client.PostForm(srv.URL+"/jobs/"+job.ID+"/schedule/move", url.Values{"was": {was}, "minutes": {minutes}})
 		if err != nil {
 			t.Fatal(err)
@@ -140,7 +140,7 @@ func TestMoveScheduleEndpoint(t *testing.T) {
 		return resp.StatusCode, strings.TrimSpace(string(b))
 	}
 
-	if code, body := move("0 20 * * *", "90"); code != 200 || body != "30 21 * * *" {
+	if code, body := move("0 20 * * *", "90"); code != http.StatusNoContent || body != "" {
 		t.Fatalf("move: %d %q", code, body)
 	}
 	if j, _ := c.Catalog.Job(ctx, job.ID); j.Schedule != "30 21 * * *" {
