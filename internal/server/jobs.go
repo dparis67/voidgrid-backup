@@ -384,7 +384,15 @@ func (c *Controller) notifyOnFailure(ctx context.Context, jobName string, run ca
 func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 	var failed, pruned, fileErrs int
 	var errs []string
+	var tm agentpb.PhaseTimings
 	for _, r := range results {
+		t := r.GetTimings()
+		tm.OpenMs += t.GetOpenMs()
+		tm.PrepareMs += t.GetPrepareMs()
+		tm.UploadMs += t.GetUploadMs()
+		tm.RetentionMs += t.GetRetentionMs()
+		tm.CommitMs += t.GetCommitMs()
+		tm.MaintenanceMs += t.GetMaintenanceMs()
 		if r.GetError() != "" {
 			failed++
 			errs = append(errs, r.GetPath()+": "+r.GetError())
@@ -410,8 +418,10 @@ func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 	default:
 		run.Status = catalog.RunSuccess
 	}
-	run.Summary = fmt.Sprintf("%d of %d paths, %d files, %s, %d old snapshots pruned",
-		len(results)-failed, len(results), run.Files, HumanBytes(run.Bytes), pruned)
+	// Files counts what changed since the last snapshot; Bytes is the whole
+	// source, not what this run added to the repository.
+	run.Summary = fmt.Sprintf("%d of %d paths, %d changed files, %s in the source, %d old snapshots pruned%s",
+		len(results)-failed, len(results), run.Files, HumanBytes(run.Bytes), pruned, phaseSummary(&tm))
 	run.Error = strings.Join(errs, "\n")
 }
 
@@ -679,6 +689,27 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// phaseSummary renders where a backup spent its time, ", open 3s, upload 40s,
+// ...", leaving out phases that took under a second. "" if none did.
+func phaseSummary(t *agentpb.PhaseTimings) string {
+	var parts []string
+	for _, ph := range []struct {
+		name string
+		ms   int64
+	}{
+		{"open", t.GetOpenMs()}, {"prepare", t.GetPrepareMs()}, {"upload", t.GetUploadMs()},
+		{"retention", t.GetRetentionMs()}, {"commit", t.GetCommitMs()}, {"maintenance", t.GetMaintenanceMs()},
+	} {
+		if ph.ms >= 1000 {
+			parts = append(parts, ph.name+" "+(time.Duration(ph.ms)*time.Millisecond).Round(time.Second).String())
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // HumanBytes formats a byte count with binary units.

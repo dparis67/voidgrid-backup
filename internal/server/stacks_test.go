@@ -106,6 +106,12 @@ func TestStackJobEndToEnd(t *testing.T) {
 		t.Fatalf("stack card with a job:\n%s", page)
 	}
 
+	// A nested directory for the browse-link check below.
+	if err := os.MkdirAll(filepath.Join(workdir, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(workdir, "config", "app.toml"), []byte("x"), 0o644)
+
 	run, err := c.RunJob(ctx, job.ID, "manual")
 	if err != nil || run.Status != catalog.RunSuccess {
 		t.Fatalf("stack backup: %+v %v", run, err)
@@ -120,6 +126,13 @@ func TestStackJobEndToEnd(t *testing.T) {
 	body := get(t, client, srv.URL+"/jobs/"+job.ID+"/snapshots/"+snaps[0].ID, "Restore the whole stack")
 	if !strings.Contains(body, "Import into running db") {
 		t.Fatal("browse page offers no import for the db dump")
+	}
+
+	// A link into a nested directory is escaped once: %252F would be decoded
+	// to the literal "stack%2Fconfig", which is no entry.
+	inner := get(t, client, srv.URL+"/jobs/"+job.ID+"/snapshots/"+snaps[0].ID+"?path=stack", "config")
+	if inner = strings.ToLower(inner); !strings.Contains(inner, "?path=stack%2fconfig") || strings.Contains(inner, "%252f") {
+		t.Fatalf("browse links are not escaped exactly once:\n%s", inner)
 	}
 
 	// In-place restore needs the project name typed in.

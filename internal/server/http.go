@@ -42,7 +42,6 @@ func NewHandler(c *Controller) http.Handler {
 		"short":     shortID,
 		"join":      strings.Join,
 		"child":     func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
-		"q":         url.QueryEscape,
 		"unixTime":  func(s int64) time.Time { return time.Unix(s, 0) },
 		"list":      func(s ...string) []string { return s },
 	}).ParseFS(web.FS, "templates/*.html"))}

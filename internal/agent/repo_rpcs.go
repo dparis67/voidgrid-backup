@@ -78,17 +78,26 @@ func (a *Agent) Backup(ctx context.Context, req *agentpb.BackupRequest) (*agentp
 
 func toPathResult(res engine.PathResult) *agentpb.PathResult {
 	pr := &agentpb.PathResult{
-		Path:       res.Path,
-		SnapshotId: res.SnapshotID,
-		Bytes:      res.Bytes,
-		Files:      int32(res.Files),
-		Errors:     int32(res.Errors),
-		Pruned:     int32(res.Pruned),
-		Warnings:   res.Warnings,
-		StartUnix:  res.Start,
-		EndUnix:    res.End,
-		Incomplete: res.Incomplete,
-		PrunedIds:  res.PrunedIDs,
+		Path:        res.Path,
+		SnapshotId:  res.SnapshotID,
+		Bytes:       res.Bytes,
+		Files:       int32(res.Files),
+		Errors:      int32(res.Errors),
+		Pruned:      int32(res.Pruned),
+		Warnings:    res.Warnings,
+		StartUnix:   res.Start,
+		EndUnix:     res.End,
+		Incomplete:  res.Incomplete,
+		PrunedIds:   res.PrunedIDs,
+		CachedFiles: int32(res.CachedFiles),
+		Timings: &agentpb.PhaseTimings{
+			OpenMs:        res.Timings.Open.Milliseconds(),
+			PrepareMs:     res.Timings.Prepare.Milliseconds(),
+			UploadMs:      res.Timings.Upload.Milliseconds(),
+			RetentionMs:   res.Timings.Retention.Milliseconds(),
+			CommitMs:      res.Timings.Commit.Milliseconds(),
+			MaintenanceMs: res.Timings.Maintenance.Milliseconds(),
+		},
 	}
 	if res.Err != nil {
 		pr.Error = res.Err.Error()

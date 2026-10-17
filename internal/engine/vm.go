@@ -56,13 +56,19 @@ func VMSourcePath(name string) string { return "/vms/" + name }
 // switched onto temporary overlays for the duration of the read, so its
 // base images are stable, and always merged back afterwards.
 func (e *Engine) BackupVM(ctx context.Context, r Repo, hv virt.Hypervisor, spec VMSpec, keep Retention) (PathResult, error) {
+	t0 := time.Now()
 	rep, err := e.open(ctx, r)
 	if err != nil {
 		return PathResult{}, err
 	}
 	defer rep.Close(ctx)
+	opened := time.Since(t0)
 	res := e.backupVM(ctx, rep, hv, spec, keep)
-	if err := e.maintain(ctx, rep); err != nil {
+	res.Timings.Open = opened
+	t0 = time.Now()
+	err = e.maintain(ctx, rep)
+	res.Timings.Maintenance = time.Since(t0)
+	if err != nil {
 		res.Warnings = append(res.Warnings, "repository maintenance: "+err.Error())
 	}
 	return res, nil

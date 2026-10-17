@@ -119,6 +119,21 @@ message PathResult {
   string incomplete = 11;
   // Snapshots retention deleted as part of this backup.
   repeated string pruned_ids = 12;
+  // Where the time went. Phases shared by every path of one request (opening
+  // the repository, maintenance) are on the first result only.
+  PhaseTimings timings = 13;
+  // Files the snapshot took unchanged from the previous one. "files" counts
+  // only the others, and "bytes" is the whole source, cached files included.
+  int32 cached_files = 14;
+}
+
+message PhaseTimings {
+  int64 open_ms = 1;        // connecting to the repository, loading its index
+  int64 prepare_ms = 2;     // policy and previous snapshots
+  int64 upload_ms = 3;      // reading the source and writing it, including any freeze
+  int64 retention_ms = 4;   // applying the keep rules
+  int64 commit_ms = 5;      // flushing the last blobs and the index
+  int64 maintenance_ms = 6; // Kopia maintenance run after the backup
 }
 
 message BackupResponse {

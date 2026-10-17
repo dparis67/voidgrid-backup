@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	kfs "github.com/kopia/kopia/fs"
 	"github.com/kopia/kopia/fs/localfs"
@@ -68,6 +69,22 @@ type PathResult struct {
 	Incomplete string   // why the snapshot is incomplete, "" if complete
 	Err        error    // the path was not backed up
 	Warnings   []string // backed up, but something needs attention
+	// CachedFiles were taken unchanged from the previous snapshot. Files counts
+	// only the others (new or changed, plus streamed entries such as dumps),
+	// while Bytes is the whole source: cached files included.
+	CachedFiles int
+	Timings     Timings
+}
+
+// Timings says where a backup spent its time. Open and Maintenance cover the
+// whole request, so with several paths they are recorded on the first result.
+type Timings struct {
+	Open        time.Duration // connecting to the repository, loading its index
+	Prepare     time.Duration // policy and previous snapshots
+	Upload      time.Duration // reading and writing the source, including any freeze
+	Retention   time.Duration // applying the keep rules
+	Commit      time.Duration // flushing the last blobs and the index
+	Maintenance time.Duration // Kopia maintenance after the backup
 }
 
 type Snapshot struct {
@@ -167,18 +184,28 @@ func (e *Engine) Init(ctx context.Context, r Repo) (created bool, knownHosts str
 // Backup snapshots each path, applies retention, then runs maintenance if
 // this agent owns it. A failing path does not stop the others.
 func (e *Engine) Backup(ctx context.Context, r Repo, paths, excludes []string, keep Retention) ([]PathResult, error) {
+	t0 := time.Now()
 	rep, err := e.open(ctx, r)
 	if err != nil {
 		return nil, err
 	}
 	defer rep.Close(ctx)
+	opened := time.Since(t0)
 
 	results := make([]PathResult, 0, len(paths))
 	for _, p := range paths {
 		results = append(results, e.backupOne(ctx, rep, p, excludes, keep))
 	}
-	if err := e.maintain(ctx, rep); err != nil && len(results) > 0 {
-		results[0].Warnings = append(results[0].Warnings, "repository maintenance: "+err.Error())
+	if len(results) > 0 {
+		results[0].Timings.Open = opened
+	}
+	t0 = time.Now()
+	err = e.maintain(ctx, rep)
+	if len(results) > 0 {
+		results[0].Timings.Maintenance = time.Since(t0)
+		if err != nil {
+			results[0].Warnings = append(results[0].Warnings, "repository maintenance: "+err.Error())
+		}
 	}
 	return results, nil
 }
@@ -211,6 +238,7 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 	if around == nil {
 		around = func(fn func() error) error { return fn() }
 	}
+	sessionStart := time.Now()
 	res.Err = repo.WriteSession(ctx, rep, repo.WriteSessionOptions{Purpose: "voidgrid-backup:backup"},
 		func(ctx context.Context, w repo.RepositoryWriter) error {
 			pol := &policy.Policy{
@@ -274,6 +302,12 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 			}
 			return nil
 		})
+	// What the session spent beyond the measured steps is the commit: Kopia
+	// flushes the last pack blobs and the index when the session closes.
+	t := &res.Timings
+	if rest := time.Since(sessionStart) - t.Prepare - t.Upload - t.Retention; rest > 0 {
+		t.Commit = rest
+	}
 	return res
 }
 

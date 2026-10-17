@@ -68,7 +68,7 @@
     {{if .SnapError}}<div class="empty err">Could not list snapshots: {{.SnapError}}</div>
     {{else if .Snapshots}}
     <table>
-      <thead><tr><th>Taken</th><th>Path</th><th>Files</th><th>Size</th><th>Errors</th><th>ID</th><th></th></tr></thead>
+      <thead><tr><th>Taken</th><th>Path</th><th title="Files read for this snapshot because they were new or changed. Files taken unchanged from the previous snapshot are not counted. Dumps and other streamed entries always count.">Changed files</th><th title="Size of the whole source in this snapshot, unchanged files included. It is not what this snapshot added to the repository.">Source size</th><th>Errors</th><th>ID</th><th></th></tr></thead>
       <tbody>
       {{range .Snapshots}}
         <tr>

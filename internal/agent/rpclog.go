@@ -60,16 +60,24 @@ func logRPC(method string, took time.Duration, req, resp any, err error) {
 }
 
 func logBackupResult(res *agentpb.PathResult, repo, took string) {
+	t := res.GetTimings()
 	if e := res.GetError(); e != "" {
 		slog.Warn("backup failed", "repo", repo, "path", res.GetPath(), "took", took, "err", e)
 	} else {
 		slog.Info("backup finished", "repo", repo, "path", res.GetPath(), "snapshot", res.GetSnapshotId(),
-			"files", res.GetFiles(), "bytes", res.GetBytes(), "unreadable", res.GetErrors(),
-			"pruned", res.GetPruned(), "incomplete", res.GetIncomplete(), "took", took)
+			"changed_files", res.GetFiles(), "cached_files", res.GetCachedFiles(), "total_bytes", res.GetBytes(),
+			"unreadable", res.GetErrors(), "pruned", res.GetPruned(), "incomplete", res.GetIncomplete(),
+			"open", ms(t.GetOpenMs()), "prepare", ms(t.GetPrepareMs()), "upload", ms(t.GetUploadMs()),
+			"retention", ms(t.GetRetentionMs()), "commit", ms(t.GetCommitMs()), "maintenance", ms(t.GetMaintenanceMs()),
+			"took", took)
 	}
 	for _, w := range res.GetWarnings() {
 		slog.Warn("backup warning", "repo", repo, "path", res.GetPath(), "warning", w)
 	}
+}
+
+func ms(n int64) string {
+	return (time.Duration(n) * time.Millisecond).Round(time.Millisecond).String()
 }
 
 // requestRepo is the repository ID a request targets, or "" for requests

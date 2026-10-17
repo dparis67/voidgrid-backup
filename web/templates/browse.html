@@ -3,7 +3,7 @@
   {{$on := .On}}
   <h2><a href="/jobs/{{.Job.ID}}">{{.Job.Name}}</a> · snapshot <span class="mono">{{short .SnapshotID}}</span></h2>
   <p class="mono">
-    <a href="{{$base}}{{if $on}}?on={{q $on}}{{end}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{q .Path}}{{if $on}}&on={{q $on}}{{end}}">{{.Name}}</a>{{end}}
+    <a href="{{$base}}{{if $on}}?on={{$on}}{{end}}">root</a>{{range .Crumbs}} / <a href="{{$base}}?path={{.Path}}{{if $on}}&on={{$on}}{{end}}">{{.Name}}</a>{{end}}
   </p>
   {{if or (gt (len .Agents) 1) (not .ServerWhy)}}
   <form method="get" action="{{$base}}" class="grid">
@@ -27,7 +27,7 @@
       {{$path := .Path}}
       {{range .Entries}}
         <tr>
-          <td class="mono">{{if .Dir}}<a href="{{$base}}?path={{q (child $path .Name)}}{{if $on}}&on={{q $on}}{{end}}">{{.Name}}/</a>{{else}}{{.Name}}{{end}}</td>
+          <td class="mono">{{if .Dir}}<a href="{{$base}}?path={{child $path .Name}}{{if $on}}&on={{$on}}{{end}}">{{.Name}}/</a>{{else}}{{.Name}}{{end}}</td>
           <td class="num">{{if .Dir}}-{{else}}{{bytes .Size}}{{end}}</td>
           <td>{{when (unixTime .ModUnix)}}</td>
         </tr>
