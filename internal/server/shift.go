@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -113,4 +114,110 @@ func (c *Controller) MoveSchedule(ctx context.Context, id, was string, minutes i
 	}
 	j.Schedule = moved
 	return moved, c.Catalog.UpdateJob(ctx, j)
+}
+
+// One-time conversion. Before v0.9.0-beta.14 every cron expression was read in
+// UTC whatever TZ said, so the schedules saved then hold UTC hours. They are
+// read in the server's zone now, and utcToLocal rewrites such a schedule so it
+// fires at the same clock time as before.
+
+const settingSchedulesConverted = "schedules_converted"
+
+// ErrAlreadyConverted is returned once the conversion has been applied or
+// dismissed: running it twice would shift every schedule twice.
+var ErrAlreadyConverted = errors.New("the schedule conversion was already done (or hidden)")
+
+// utcToLocal rewrites a schedule written in UTC hours into the server's zone,
+// at the zone's offset as of now. A schedule that shiftSchedule can't move
+// (steps, ranges, several hours, a day of the month) is ErrNotMovable.
+func utcToLocal(spec string, now time.Time) (string, error) {
+	_, off := now.Local().Zone()
+	return shiftSchedule(spec, off/60)
+}
+
+// ScheduleConversion is one job in the conversion preview.
+type ScheduleConversion struct {
+	JobID, Name string
+	From, To    string
+	Skip        string // why this one can't be converted, "" if it can
+}
+
+// SchedulesConverted reports whether the conversion was applied or hidden.
+func (c *Controller) SchedulesConverted(ctx context.Context) (bool, error) {
+	v, err := c.Catalog.GetSetting(ctx, settingSchedulesConverted)
+	return v != "", err
+}
+
+// ConversionPreview lists every job that has a schedule with what it would
+// become. Nothing is offered when the server's zone is UTC: there is nothing to
+// convert.
+func (c *Controller) ConversionPreview(ctx context.Context, now time.Time) ([]ScheduleConversion, error) {
+	if _, off := now.Local().Zone(); off == 0 {
+		return nil, nil
+	}
+	jobs, err := c.Catalog.ListJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []ScheduleConversion
+	for _, j := range jobs {
+		if j.Schedule == "" {
+			continue
+		}
+		sc := ScheduleConversion{JobID: j.ID, Name: j.Name, From: j.Schedule}
+		if to, err := utcToLocal(j.Schedule, now); err != nil {
+			sc.Skip = "not a single daily time: edit it by hand"
+		} else {
+			sc.To = to
+		}
+		out = append(out, sc)
+	}
+	return out, nil
+}
+
+// ConvertSchedules converts the schedules of the jobs in ids and records that
+// the conversion is done. Jobs that are running or can't be converted are
+// returned in skipped, with why.
+func (c *Controller) ConvertSchedules(ctx context.Context, ids []string, now time.Time) (converted int, skipped []string, err error) {
+	if done, err := c.SchedulesConverted(ctx); err != nil {
+		return 0, nil, err
+	} else if done {
+		return 0, nil, ErrAlreadyConverted
+	}
+	for _, id := range ids {
+		if !c.inflight.start(id) {
+			skipped = append(skipped, id+": running")
+			continue
+		}
+		err := func() error {
+			defer c.inflight.done(id)
+			j, err := c.Catalog.Job(ctx, id)
+			if err != nil {
+				return err
+			}
+			to, err := utcToLocal(j.Schedule, now)
+			if err != nil {
+				skipped = append(skipped, j.Name+": "+err.Error())
+				return nil
+			}
+			j.Schedule = to
+			if err := c.Catalog.UpdateJob(ctx, j); err != nil {
+				return err
+			}
+			converted++
+			return nil
+		}()
+		if err != nil {
+			return converted, skipped, err
+		}
+	}
+	return converted, skipped, c.Catalog.SetSetting(ctx, settingSchedulesConverted, now.UTC().Format(time.RFC3339))
+}
+
+// DismissConversion records that the schedules need no conversion.
+func (c *Controller) DismissConversion(ctx context.Context, now time.Time) error {
+	if done, err := c.SchedulesConverted(ctx); err != nil || done {
+		return err
+	}
+	return c.Catalog.SetSetting(ctx, settingSchedulesConverted, "dismissed "+now.UTC().Format(time.RFC3339))
 }

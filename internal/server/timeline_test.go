@@ -239,3 +239,147 @@ func TestPagesNameTheirZone(t *testing.T) {
 		}
 	}
 }
+
+// A bar is a link and a browser drags a link natively, which cancels the
+// pointer drag after the first one; the page must switch that off. And the
+// Jobs list says which zone its cron column is in.
+func TestScheduleBarsAreNotNativelyDraggable(t *testing.T) {
+	c, job, _ := setupJob(t)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	body := get(t, client, srv.URL+"/schedule", "tl-bar")
+	if !strings.Contains(body, `href="/jobs/`+job.ID+`" draggable="false"`) {
+		t.Errorf("a movable bar is still a natively draggable link:\n%s", body)
+	}
+	if !strings.Contains(body, `addEventListener("dragstart"`) {
+		t.Error("the page does not cancel dragstart on bars")
+	}
+	jobs := get(t, client, srv.URL+"/jobs", "Schedule")
+	if !strings.Contains(jobs, "Cron expressions are read in the server's time zone") && !strings.Contains(jobs, "Cron expressions are read in the server&#39;s time zone") {
+		t.Errorf("the Jobs list does not name the zone of its Schedule column")
+	}
+}
+
+func TestUTCToLocal(t *testing.T) {
+	old := time.Local
+	defer func() { time.Local = old }()
+	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+
+	time.Local = time.FixedZone("CDT", -5*3600)
+	for in, want := range map[string]string{
+		"0 3 * * *":    "0 22 * * *", // 03:00 UTC was 22:00 the evening before
+		"0 2 * * *":    "0 21 * * *",
+		"5 23 * * *":   "5 18 * * *",
+		"30 5 * * *":   "30 0 * * *",
+		"0 5 * * *":    "0 0 * * *",
+		"0 3 * * 1":    "0 22 * * 0", // crossing midnight backwards moves the weekday too
+		"0 12 * * 1,3": "0 7 * * 1,3",
+	} {
+		if got, err := utcToLocal(in, now); err != nil || got != want {
+			t.Errorf("CDT: utcToLocal(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"*/15 * * * *", "0 2,14 * * *", "@daily", "0 3 1 * *"} {
+		if _, err := utcToLocal(in, now); !errors.Is(err, ErrNotMovable) {
+			t.Errorf("utcToLocal(%q) error = %v, want ErrNotMovable", in, err)
+		}
+	}
+
+	time.Local = time.FixedZone("IST", 5*3600+1800)
+	if got, _ := utcToLocal("0 20 * * 1", now); got != "30 1 * * 2" {
+		t.Errorf("IST: got %q, want %q", got, "30 1 * * 2")
+	}
+	time.Local = time.UTC
+	if got, _ := utcToLocal("0 3 * * *", now); got != "0 3 * * *" {
+		t.Errorf("UTC server: got %q, want it unchanged", got)
+	}
+}
+
+func TestConvertSchedulesOnce(t *testing.T) {
+	ctx := context.Background()
+	old := time.Local
+	time.Local = time.FixedZone("CDT", -5*3600)
+	defer func() { time.Local = old }()
+
+	c, job, _ := setupJob(t) // "docs", 0 3 * * *
+	add := func(name, sched string) catalog.Job {
+		j, err := c.AddJob(ctx, JobInput{Name: name, AgentID: job.AgentID, RepositoryID: job.RepositoryID,
+			Paths: job.Paths, Schedule: sched, Keep: catalog.DefaultRetention, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j
+	}
+	keep := add("already-local", "0 22 * * *")
+	odd := add("every-quarter", "*/15 * * * *")
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	sched := func(id string) string {
+		t.Helper()
+		j, err := c.Catalog.Job(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j.Schedule
+	}
+
+	// The Jobs page offers it, and the preview shows each result.
+	if body := get(t, client, srv.URL+"/jobs", "Jobs"); !strings.Contains(body, "/jobs/convert-utc") {
+		t.Fatal("the Jobs page does not offer the conversion")
+	}
+	preview := get(t, client, srv.URL+"/jobs/convert-utc", "Convert schedules from UTC")
+	for _, want := range []string{"0 3 * * *", "0 22 * * *", "edit it by hand"} {
+		if !strings.Contains(preview, want) {
+			t.Errorf("the preview does not show %q", want)
+		}
+	}
+
+	// Convert docs only: the ticked one changes, the others stay.
+	post(t, client, srv.URL+"/jobs/convert-utc", url.Values{"action": {"convert"}, "job": {job.ID}})
+	if got := sched(job.ID); got != "0 22 * * *" {
+		t.Fatalf("docs = %q, want 0 22 * * *", got)
+	}
+	if sched(keep.ID) != "0 22 * * *" || sched(odd.ID) != "*/15 * * * *" {
+		t.Fatalf("unticked jobs changed: %q %q", sched(keep.ID), sched(odd.ID))
+	}
+
+	// It is recorded: the offer is gone, and a second run changes nothing.
+	if body := get(t, client, srv.URL+"/jobs", "Jobs"); strings.Contains(body, "/jobs/convert-utc") {
+		t.Error("the offer is still on the Jobs page after the conversion")
+	}
+	post(t, client, srv.URL+"/jobs/convert-utc", url.Values{"action": {"convert"}, "job": {job.ID, keep.ID}})
+	if sched(job.ID) != "0 22 * * *" || sched(keep.ID) != "0 22 * * *" {
+		t.Fatalf("a second conversion shifted schedules again: %q %q", sched(job.ID), sched(keep.ID))
+	}
+	if _, _, err := c.ConvertSchedules(ctx, []string{job.ID}, time.Now()); !errors.Is(err, ErrAlreadyConverted) {
+		t.Fatalf("second ConvertSchedules error = %v, want ErrAlreadyConverted", err)
+	}
+}
+
+func TestDismissConversionAndUTCServer(t *testing.T) {
+	ctx := context.Background()
+	old := time.Local
+	defer func() { time.Local = old }()
+
+	c, _, _ := setupJob(t)
+	// A server in UTC has nothing to convert, so nothing is offered.
+	time.Local = time.UTC
+	if rows, err := c.ConversionPreview(ctx, time.Now()); err != nil || len(rows) != 0 {
+		t.Fatalf("UTC preview: %+v %v", rows, err)
+	}
+	time.Local = time.FixedZone("CDT", -5*3600)
+	if rows, _ := c.ConversionPreview(ctx, time.Now()); len(rows) == 0 {
+		t.Fatal("no preview rows for a zone with an offset")
+	}
+	if err := c.DismissConversion(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if done, _ := c.SchedulesConverted(ctx); !done {
+		t.Fatal("dismissing did not record it")
+	}
+	if _, _, err := c.ConvertSchedules(ctx, nil, time.Now()); !errors.Is(err, ErrAlreadyConverted) {
+		t.Fatalf("convert after dismiss: %v", err)
+	}
+}

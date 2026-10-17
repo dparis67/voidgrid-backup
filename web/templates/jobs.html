@@ -1,10 +1,11 @@
 {{define "jobs"}}{{template "top" .}}
   <h2>Jobs</h2>
+  {{if .ConvertOffer}}<div class="notice">Schedules saved before v0.9.0-beta.14 were read as UTC and may still hold UTC hours. <a href="/jobs/convert-utc">Review and convert them to {{$.TZ}}</a>, once.</div>{{end}}
   <div id="jobs-table">
   <div class="card">
     {{if .Jobs}}
     <table>
-      <thead><tr>{{range sortHeads .Sort .Desc}}<th><a class="sort" href="{{.Href}}">{{.Label}}{{.Mark}}</a></th>{{end}}<th></th></tr></thead>
+      <thead><tr>{{range sortHeads .Sort .Desc}}<th><a class="sort" href="{{.Href}}">{{.Label}}{{.Mark}}</a>{{if eq .Label "Schedule"}} <span class="muted" title="Cron expressions are read in the server's time zone">{{$.TZ}}</span>{{end}}</th>{{end}}<th></th></tr></thead>
       <tbody>
       {{range .Jobs}}
         <tr>

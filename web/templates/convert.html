@@ -1,0 +1,32 @@
+{{define "convert"}}{{template "top" .}}
+  <h2>Convert schedules from UTC</h2>
+  {{if .Done}}
+  <p class="hint">This was already done, or hidden. Nothing is left to convert. Edit a schedule on the <a href="/jobs">Jobs</a> page, or drag its bar on the <a href="/schedule">Schedule</a> page.</p>
+  {{else if .None}}
+  <p class="hint">Nothing to convert: the server's zone is UTC, or no job has a schedule. Back to the <a href="/jobs">Jobs</a> page.</p>
+  {{else}}
+  <p class="hint">Before v0.9.0-beta.14 the server read every cron expression as UTC. It now reads them in {{$.TZ}}, so a schedule saved before then fires at a different clock time than it used to. This rewrites the schedules you tick so they fire at the same clock time as before, at today's offset (daylight saving moves the old UTC schedules by an hour twice a year; from now on a schedule stays at its local time). <strong>Untick a job you already set in local time</strong>, for example by dragging it on the Schedule page. This can be done once: it is recorded, and the offer goes away.</p>
+  <form method="post" action="/jobs/convert-utc">
+    <div class="card">
+      <table>
+        <thead><tr><th class="tick"></th><th>Job</th><th>Now</th><th>After converting ({{$.TZ}})</th><th></th></tr></thead>
+        <tbody>
+        {{range .Rows}}
+          <tr>
+            <td class="tick">{{if not .Skip}}<input type="checkbox" name="job" value="{{.JobID}}" checked aria-label="Convert {{.Name}}">{{end}}</td>
+            <td><a href="/jobs/{{.JobID}}">{{.Name}}</a></td>
+            <td class="mono">{{.From}}</td>
+            <td class="mono">{{if .To}}{{.To}}{{else}}-{{end}}</td>
+            <td class="muted">{{.Skip}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+    <p class="row" style="margin-top:12px">
+      <button type="submit" name="action" value="convert">Convert the ticked schedules</button>
+      <button class="plain" type="submit" name="action" value="dismiss">They are already in local time: hide this</button>
+    </p>
+  </form>
+  {{end}}
+{{template "bottom" .}}{{end}}

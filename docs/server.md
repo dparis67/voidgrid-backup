@@ -56,6 +56,16 @@ default.
 > now runs at 01:00 Central. Change each job's schedule to its local hour
 > (`0 20 * * *`) when you upgrade, and until you have, expect one run at the
 > old expression's local hour: the next run is counted from the last one.
+>
+> From v0.9.0-beta.15 the Jobs page offers a one-time **conversion**: a preview
+> lists every scheduled job with its schedule now and after converting (the
+> same clock time as before, at today's UTC offset, moving the weekdays too
+> when an hour crosses midnight). Untick a job you already set in local time,
+> then convert. Schedules that are not a single daily time (`*/15`, several
+> hours, ranges, a day of the month) are listed but must be edited by hand. The
+> conversion can be done once, and it is recorded so it can't shift schedules
+> twice; there is also a button to hide the offer without converting. A server
+> whose zone is UTC is never offered it.
 
 ## The data directory
 

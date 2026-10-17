@@ -82,6 +82,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /notifications/test", u.testNotifications)
 	mux.HandleFunc("GET /logs", u.logs)
 	mux.HandleFunc("GET /jobs", u.jobs)
+	mux.HandleFunc("GET /jobs/convert-utc", u.convertForm)
+	mux.HandleFunc("POST /jobs/convert-utc", u.convertApply)
 	mux.HandleFunc("GET /schedule", u.schedule)
 	mux.HandleFunc("POST /jobs", u.addJob)
 	mux.HandleFunc("GET /jobs/{id}", u.job)
@@ -499,6 +501,8 @@ type jobsPage struct {
 	Form   url.Values
 	Sort   string // active sort column, "" for the stored order
 	Desc   bool
+	// ConvertOffer: schedules saved before beta.14 may still hold UTC hours.
+	ConvertOffer bool
 }
 
 func (u *ui) jobs(w http.ResponseWriter, r *http.Request) {
@@ -524,6 +528,10 @@ func (u *ui) renderJobs(w http.ResponseWriter, r *http.Request, code int, p jobs
 	clashes := findClashes(p.Jobs, time.Now())
 	for i := range p.Jobs {
 		p.Jobs[i].Clashes = clashes[p.Jobs[i].ID]
+	}
+	if done, err := u.c.SchedulesConverted(ctx); err == nil && !done {
+		rows, err := u.c.ConversionPreview(ctx, time.Now())
+		p.ConvertOffer = err == nil && len(rows) > 0
 	}
 	p.Sort = sortJobs(p.Jobs, r.URL.Query().Get("sort"), r.URL.Query().Get("dir") == "desc")
 	p.Desc = p.Sort != "" && r.URL.Query().Get("dir") == "desc"
