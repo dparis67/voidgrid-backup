@@ -115,6 +115,31 @@ func (c *Catalog) DeleteApprovedRegistrations(ctx context.Context, agentID strin
 	return err
 }
 
+// DeleteAgent removes an agent, its registrations and its repository
+// assignments (and so its default repository). It fails while a job still
+// belongs to the agent. Runs, snapshots and maintenance history stay.
+func (c *Catalog) DeleteAgent(ctx context.Context, id string) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM registrations WHERE agent_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM repository_agents WHERE agent_id = ?`, id); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM agents WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
 func scanRegistration(s scanner) (Registration, error) {
 	var r Registration
 	var created string

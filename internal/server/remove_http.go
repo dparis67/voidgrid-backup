@@ -100,26 +100,30 @@ func (u *ui) maintainRepository(w http.ResponseWriter, r *http.Request) {
 // agent. It is typed-name confirmed because it changes the Kopia owner.
 func (u *ui) setMaintainer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	back := "/repositories"
+	if r.FormValue("from") == "agents" {
+		back = "/" // the form on a refused agent delete
+	}
 	rp, err := u.c.Catalog.Repository(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	if r.FormValue("confirm") != rp.Name {
-		redirectNotice(w, r, "/repositories", "Type the repository name to confirm changing who maintains it.")
+		redirectNotice(w, r, back, "Type the repository name to confirm changing who maintains it.")
 		return
 	}
 	who := r.FormValue("who")
 	warnings, err := u.c.SetMaintainer(r.Context(), id, who, r.FormValue("agent"), r.FormValue("server_path"))
 	if err != nil {
-		redirectNotice(w, r, "/repositories", "Not changed: "+err.Error())
+		redirectNotice(w, r, back, "Not changed: "+err.Error())
 		return
 	}
 	msg := "Maintenance of " + rp.Name + " is now run by the " + who + "."
 	if len(warnings) > 0 {
 		msg += " Warning: " + strings.Join(warnings, " ")
 	}
-	redirectNotice(w, r, "/repositories", msg)
+	redirectNotice(w, r, back, msg)
 }
 
 // assignAgent tests that an agent can open the repository, then lets it use it.

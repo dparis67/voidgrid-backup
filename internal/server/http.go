@@ -78,6 +78,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories", u.addRepository)
 	mux.HandleFunc("GET /repositories/{id}/edit", u.editRepositoryForm)
 	mux.HandleFunc("POST /repositories/{id}/edit", u.editRepository)
+	mux.HandleFunc("POST /agents/{id}/delete", u.deleteAgent)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
@@ -226,6 +227,10 @@ type agentsPage struct {
 	// Replaces maps a pending registration's ID to the agent it looks like a
 	// rebuild of (same hostname), for the approve form to preselect.
 	Replaces map[string]*replaceCandidate
+	// Blocked is set when a delete was refused: what stands in its way, with
+	// HandTo the other agents maintenance can be handed to.
+	Blocked *AgentInUseError
+	HandTo  []catalog.Agent
 }
 
 func (u *ui) agents(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +251,13 @@ func (u *ui) renderAgents(w http.ResponseWriter, r *http.Request, code int, p ag
 		return
 	}
 	p.Agents = agents
+	if p.Blocked != nil {
+		for _, a := range agents {
+			if a.ID != p.Blocked.Agent.ID {
+				p.HandTo = append(p.HandTo, a)
+			}
+		}
+	}
 	p.Replaces = map[string]*replaceCandidate{}
 	now := time.Now()
 	for _, reg := range p.Pending {
@@ -264,6 +276,39 @@ func (u *ui) agentsFailed(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	p.Error = err.Error()
 	u.renderAgents(w, r, http.StatusBadRequest, p)
+}
+
+// deleteAgent removes an agent after its name is typed. A refusal shows what
+// is in the way, with a form to hand its maintenance over.
+func (u *ui) deleteAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ag, err := u.c.Catalog.Agent(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.FormValue("confirm") != ag.Name {
+		redirectNotice(w, r, "/", "Type the agent name to confirm deletion.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+	warnings, err := u.c.DeleteAgent(ctx, id)
+	if blocked, ok := isAgentInUse(err); ok {
+		p := agentsPage{base: u.newBase("Agents", "agents", r), Blocked: &blocked}
+		p.Error = blocked.Error()
+		u.renderAgents(w, r, http.StatusConflict, p)
+		return
+	}
+	if err != nil {
+		u.agentsFailed(w, r, err)
+		return
+	}
+	msg := "Deleted " + ag.Name + ". Its snapshots stay in their repositories."
+	if len(warnings) > 0 {
+		msg += " Warning: " + strings.Join(warnings, "; ") + "."
+	}
+	redirectNotice(w, r, "/", msg)
 }
 
 func (u *ui) approveRegistration(w http.ResponseWriter, r *http.Request) {

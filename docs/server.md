@@ -223,6 +223,17 @@ and snapshots, which is how a wiped or redeployed host comes back. Reject
 refuses an agent; Forget removes a rejected entry so it can register again.
 Agents can be renamed at any time: the name is only a label.
 
+**Delete** an agent from the same page (type its name to confirm). It is refused
+while the agent still has jobs, and while it is the Kopia maintenance owner of a
+repository: the page then says which repositories, with a form to hand each
+one's maintenance to the server or another assigned agent, after which the
+delete can be repeated. The owner is read through another assigned agent, or
+through the server if it can open the repository; if neither can, the delete is
+allowed with a warning, since nothing could maintain that repository anyway.
+Deleting removes the agent, its repository assignments (and so its default
+repository) and its registrations. Its snapshots stay in their repositories and
+can still be browsed and restored through another agent.
+
 #### What Replaces does
 
 Replacing signs the new host's key with the **old agent's ID** and points that

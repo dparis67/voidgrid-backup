@@ -1,4 +1,22 @@
 {{define "agents"}}{{template "top" .}}
+  {{with .Blocked}}
+  <h2>{{.Agent.Name}} cannot be deleted yet</h2>
+  <div class="card">
+    <div class="fold-body">
+      {{if .Jobs}}<p>Jobs still on this agent: <strong>{{join .Jobs ", "}}</strong>. Delete them on the <a href="/jobs">Jobs page</a> first; the snapshots stay in the repository.</p>{{end}}
+      {{range .Maintains}}
+      <form class="row" method="post" action="/repositories/{{.ID}}/maintainer">
+        <input type="hidden" name="from" value="agents"><input type="hidden" name="confirm" value="{{.Name}}">
+        <span><strong>{{.Name}}</strong> is maintained by this agent. Hand maintenance to</span>
+        <select name="who"><option value="server">the server</option>{{if $.HandTo}}<option value="agent">an agent:</option>{{end}}</select>
+        {{if $.HandTo}}<select name="agent">{{range $.HandTo}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>{{end}}
+        <button class="plain" type="submit">Hand over</button>
+      </form>
+      <p class="hint">The server needs to reach the storage itself; an agent must already be assigned to it (Repositories, Manage). Then delete {{$.Blocked.Agent.Name}} again.</p>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
   <h2>Agents</h2>
   <div id="agents-table">
   <div class="card">
@@ -26,7 +44,7 @@
   {{if .Agents}}<div id="live" data-ids="agents-table" data-every="15000" hidden></div>{{end}}
 
   {{if .Agents}}
-  <h2>Rename an agent</h2>
+  <h2>Rename or delete an agent</h2>
   <p class="hint">The name is only a label. The agent keeps its ID, so its snapshots and jobs are unaffected.</p>
   <div class="card">
     {{range .Agents}}
@@ -34,6 +52,14 @@
       <label>Name <input name="name" value="{{.Name}}" required></label>
       <div class="actions"><button type="submit">Rename</button></div>
     </form>
+    <details class="repo-more">
+      <summary class="muted">Delete {{.Name}}…</summary>
+      <form class="grid" method="post" action="/agents/{{.ID}}/delete">
+        <p class="hint wide">Refused while the agent has jobs, or while it is the one that maintains a repository. Its repository assignments are removed and it can no longer be reached; its snapshots stay in their repositories. To use the host again, register it again.</p>
+        <label>Type <span class="mono">{{.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+        <div class="actions"><button class="danger" type="submit">Delete agent</button></div>
+      </form>
+    </details>
     {{end}}
   </div>
   {{end}}
