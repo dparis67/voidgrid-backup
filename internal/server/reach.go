@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
@@ -58,9 +61,52 @@ func (c *Controller) CheckReach(ctx context.Context, repoID string) ([]reachResu
 			}
 		}()
 	}
-	results[len(ids)] = c.serverReach(ctx, repo)
+	results[len(ids)] = c.checkServer(ctx, repo)
 	wg.Wait()
 	return results, nil
+}
+
+// serverReachState is the last time the server tried to open a repository, kept
+// so the Repositories page can say whether it can without opening anything.
+type serverReachState struct {
+	OK     bool      `json:"ok"`
+	Detail string    `json:"detail,omitempty"`
+	At     time.Time `json:"at"`
+}
+
+func serverReachKey(repoID string) string { return "repo_server_reach:" + repoID }
+
+// checkServer has the server open the repository and remembers the answer.
+func (c *Controller) checkServer(ctx context.Context, repo catalog.Repository) reachResult {
+	r := c.serverReach(ctx, repo)
+	b, _ := json.Marshal(serverReachState{OK: r.OK, Detail: r.Detail, At: time.Now()}) // plain fields always marshal
+	if err := c.Catalog.SetSetting(context.WithoutCancel(ctx), serverReachKey(repo.ID), string(b)); err != nil {
+		slog.Warn("save whether the server can open a repository", "repo", repo.ID, "err", err)
+	}
+	return r
+}
+
+// ServerReachNote says, for the Repositories page, whether the server can open
+// the repository: a warning when it cannot, a plain line when it can or has not
+// been checked. It is empty when the server has no repository engine at all.
+// It never opens the repository; the answer is the last check's (Check access,
+// or the check made when the repository was added).
+func (c *Controller) ServerReachNote(ctx context.Context, repo catalog.Repository) (text string, warn bool) {
+	if c.Engine == nil {
+		return "", false
+	}
+	if err := c.ServerCanOpen(repo); err != nil {
+		return "The server cannot open this repository: " + err.Error(), true
+	}
+	v, err := c.Catalog.GetSetting(ctx, serverReachKey(repo.ID))
+	var st serverReachState
+	if err != nil || v == "" || json.Unmarshal([]byte(v), &st) != nil {
+		return "Whether the server can open this repository has not been checked yet: use Manage, Check access.", false
+	}
+	if !st.OK {
+		return fmt.Sprintf("The server could not open this repository when last checked (%s): %s", ago(st.At), st.Detail), true
+	}
+	return fmt.Sprintf("The server can open this repository (checked %s).", ago(st.At)), false
 }
 
 func (c *Controller) serverReach(ctx context.Context, repo catalog.Repository) reachResult {

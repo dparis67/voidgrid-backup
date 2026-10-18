@@ -47,6 +47,19 @@ type RepoMaintenance struct {
 	Error   string    `json:"error,omitempty"`
 	AgentID string    `json:"agent_id,omitempty"` // the agent that ran, or last tried
 	NextDue time.Time `json:"next_due"`
+	// OwnerGone is set when the last cycle failed because the Kopia maintenance
+	// owner (Owner, "user@host") is not a registered agent any more, which only
+	// a hand-over to the server or an agent can fix.
+	OwnerGone bool   `json:"owner_gone,omitempty"`
+	Owner     string `json:"owner,omitempty"`
+}
+
+// OwnerGoneError says the repository's maintenance owner is not a registered
+// agent (a replaced or removed host), so no agent can run its maintenance.
+type OwnerGoneError struct{ Owner string }
+
+func (e OwnerGoneError) Error() string {
+	return fmt.Sprintf("the maintenance owner is %q, which is not a registered agent (a replaced or removed host?), so no agent can run maintenance", e.Owner)
 }
 
 // RepoMaintenance returns the saved state, or ok=false if the repository has
@@ -96,6 +109,10 @@ func (c *Controller) MaintainRepository(ctx context.Context, repoID string) (Rep
 		RepositoryID: repo.ID, AgentID: agentID, Status: "ok", StartedAt: now, FinishedAt: time.Now(), Queued: queued}, err)
 	if err != nil {
 		m.Status, m.Error = "failed", err.Error()
+		var gone OwnerGoneError
+		if errors.As(err, &gone) {
+			m.OwnerGone, m.Owner = true, gone.Owner
+		}
 		m.NextDue = now.Add(maintRetry + maintRand(maintJitter))
 		slog.Error("maintenance failed", "repo", repo.ID, "name", repo.Name, "err", err)
 	} else {
@@ -164,7 +181,7 @@ func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository
 		owner := resp.GetOwner()
 		next, err := c.Catalog.Agent(ctx, owner[strings.LastIndex(owner, "@")+1:])
 		if err != nil || tried[next.ID] {
-			return agent.ID, queued, fmt.Errorf("the maintenance owner is %q, which is not a registered agent (a replaced or removed host?), so no agent can run maintenance", owner)
+			return agent.ID, queued, OwnerGoneError{Owner: owner}
 		}
 		agent = next
 	}
@@ -213,4 +230,26 @@ func (c *Controller) startMaintenance(ctx context.Context, now time.Time) {
 			}
 		}(r.ID)
 	}
+}
+
+// TakeOverMaintenance hands a repository's maintenance to to: "server", or the
+// ID of an agent assigned to it. It is the fix for a maintenance owner that is
+// not a registered agent any more. The repository must be idle, as for any
+// change of maintainer; afterwards its next cycle is due at once.
+func (c *Controller) TakeOverMaintenance(ctx context.Context, repoID, to string) ([]string, error) {
+	who, agentID := MaintByAgent, to
+	if to == MaintByServer {
+		who, agentID = MaintByServer, ""
+	}
+	warnings, err := c.SetMaintainer(ctx, repoID, who, agentID, "")
+	if err != nil {
+		return warnings, err
+	}
+	if m, ok := c.RepoMaintenance(ctx, repoID); ok {
+		m.OwnerGone, m.Owner, m.Error = false, "", ""
+		m.Status = "ok"
+		m.NextDue = time.Now()
+		c.saveMaintenance(ctx, repoID, m)
+	}
+	return warnings, nil
 }

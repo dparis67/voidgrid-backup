@@ -350,8 +350,12 @@ histories and retention never touch each other.
   that is replaced would otherwise stall it. The Repositories page says so for
   a shared repository that an agent still maintains.
 - **Default location.** A new repository's SFTP path and S3 prefix start as
-  `<agent-id>-backup`, so unrelated data never shares a directory. It is a
-  default, not enforced.
+  `<hostname>-<first 6 characters of the agent ID>-backup` (for example
+  `harbinger-92af5b-backup`; the server uses `voidgrid-server-backup`), so
+  unrelated data never shares a directory and a path is readable. The ID part
+  is there because adding a repository at a path that already holds one
+  connects to it, so two hosts with the same hostname must not share a default.
+  It is a default, not enforced.
 - A Storage Box limits simultaneous connections (about 10). Jobs on several
   agents share them, so stagger their schedules (the Jobs page warns about
   overlaps).
@@ -409,7 +413,7 @@ the access key and secret can be edited. This is deliberate, not an omission.
 - **A different bucket or endpoint** is a copy to different storage, not a
   rename.
 
-The prefix is only a name, and the default `<agent-id>-backup` never has to
+The prefix is only a name, and the default never has to
 change. If you do need a repository at another prefix or bucket:
 
 1. Make sure nothing is running on it.
@@ -429,6 +433,17 @@ the same way as the SFTP one. It has not been, and it should be tested against
 a real bucket first, since S3 itself has not yet been exercised against real
 storage here.
 
+#### When the maintenance owner is gone
+
+If the host that owns a repository's Kopia maintenance is replaced or removed
+without handing it over, a maintenance cycle fails with "the maintenance owner
+is ... not a registered agent". The repository's card then shows **Take over
+maintenance** with the server (when it can open the repository) and the agents
+assigned to it. Choosing one makes it the owner, needs nothing to be running on
+the repository, and makes the next cycle due at once. Approving a rebuilt host
+under **Replaces**, and the hand-over that **Delete agent** asks for, avoid
+getting here.
+
 #### When only the server can reach a repository
 
 A repository is normally opened by an agent. If the server can open it itself
@@ -437,6 +452,12 @@ filesystem directory given as **Path on the server**), it can stand in when no
 agent can reach it. **Manage, Check access** on a repository asks every agent
 assigned to it, and the server, to open it and says which can.
 
+- **The card says whether the server can.** Under the location, a repository
+  the server cannot open (a filesystem directory with no path on the server, or
+  a last check that failed) shows a warning with the reason; one it can open,
+  and one never checked, show a plain line. The check is made in the background
+  when an agent adds a repository, and again by **Manage, Check access**. The
+  page itself never opens the repository.
 - **Reads fall back by themselves.** Measuring a repository and refreshing a
   job's snapshot list try the agent first and, if it fails and the server can
   open the repository, do it through the server's own engine. The card says

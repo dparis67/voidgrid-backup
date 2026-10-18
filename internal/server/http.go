@@ -84,6 +84,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
+	mux.HandleFunc("POST /repositories/{id}/takeover", u.takeOverMaintenance)
 	mux.HandleFunc("POST /repositories/{id}/agents", u.assignAgent)
 	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/remove", u.unassignAgent)
 	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/default", u.defaultRepository)
@@ -375,6 +376,8 @@ type repoRow struct {
 	Assigned    []assignedAgent
 	Unassigned  []catalog.Agent // agents that could still be assigned
 	ServerOK    bool            // the server can open it itself, so it can stand in for an agent
+	ServerNote  string          // whether the server can open it, from the last check
+	ServerWarn  bool            // ServerNote is a warning: the server cannot
 }
 
 // assignedAgent is an agent that may use a repository.
@@ -430,6 +433,7 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 			p.Measuring = true
 		}
 		row.WipeError = u.c.WipeError(ctx, rp.ID)
+		row.ServerNote, row.ServerWarn = u.c.ServerReachNote(ctx, rp)
 		row.MaintBy = u.c.MaintainedBy(ctx, rp.ID)
 		if m, ok := u.c.RepoMaintenance(ctx, rp.ID); ok {
 			row.Maint = &m

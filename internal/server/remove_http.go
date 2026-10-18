@@ -126,6 +126,32 @@ func (u *ui) setMaintainer(w http.ResponseWriter, r *http.Request) {
 	redirectNotice(w, r, back, msg)
 }
 
+// takeOverMaintenance is the one-click fix on a repository whose maintenance
+// owner is gone: the form names the server or an assigned agent.
+func (u *ui) takeOverMaintenance(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rp, err := u.c.Catalog.Repository(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	to := r.FormValue("to")
+	if to == "" {
+		redirectNotice(w, r, "/repositories", "Choose who takes over maintenance.")
+		return
+	}
+	warnings, err := u.c.TakeOverMaintenance(r.Context(), id, to)
+	if err != nil {
+		redirectNotice(w, r, "/repositories", "Not changed: "+err.Error())
+		return
+	}
+	msg := "Maintenance of " + rp.Name + " has been taken over. Its next cycle runs at the next scheduler tick."
+	if len(warnings) > 0 {
+		msg += " Warning: " + strings.Join(warnings, " ")
+	}
+	redirectNotice(w, r, "/repositories", msg)
+}
+
 // assignAgent tests that an agent can open the repository, then lets it use it.
 func (u *ui) assignAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

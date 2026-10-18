@@ -142,6 +142,11 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	if err := c.Catalog.AssignAgent(ctx, id, agent.ID); err != nil {
 		return r, generated, err
 	}
+	// Find out in the background whether the server can open it too, so the
+	// Repositories page can warn when it cannot.
+	if c.Engine != nil && c.ServerCanOpen(r) == nil {
+		go c.checkServer(context.Background(), r)
+	}
 	return r, generated, nil
 }
 

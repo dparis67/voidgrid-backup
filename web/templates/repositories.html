@@ -26,6 +26,7 @@
     <div class="repo-loc mono">{{.Location}}{{if .Config.Filesystem}}
       <div class="hint">Local path on the agent.{{if .Config.Filesystem.ServerPath}} The server sees it at <span class="mono">{{.Config.Filesystem.ServerPath}}</span>.{{else}} The server can maintain it only if the same directory is mounted in the server container (set under Manage).{{end}}</div>{{end}}</div>
 
+    {{if .ServerNote}}<div class="repo-note {{if .ServerWarn}}warn{{else}}muted{{end}}">{{.ServerNote}}</div>{{end}}
     <dl class="repo-facts">
       <div><dt>Jobs</dt><dd>{{.Jobs}}</dd></div>
       <div><dt>Initialized</dt><dd>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</dd></div>
@@ -36,6 +37,11 @@
         <dd>{{if .Maintaining}}<span class="running">running…</span>
           {{else if .Maint}}{{if not .Maint.LastRun.IsZero}}<span class="{{if eq .Maint.Status "ok"}}ok{{else}}bad{{end}}">{{.Maint.Status}}</span> {{ago .Maint.LastRun}}{{else}}<span class="muted">not run yet</span>{{end}}
             {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
+            {{if .Maint.OwnerGone}}
+            <form method="post" action="/repositories/{{.ID}}/takeover" class="row">
+              <select name="to">{{if .ServerOK}}<option value="server">the server</option>{{end}}{{range .Assigned}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+              <button class="plain" type="submit" title="Hands maintenance to the one chosen. Nothing may be running on the repository.">Take over maintenance</button>
+            </form>{{end}}
             {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
           {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
           <div class="muted">by {{.MaintBy}}</div>
@@ -106,7 +112,7 @@
   {{if .Measuring}}<div id="live" data-ids="repo-table" data-every="3000" hidden></div>{{end}}
 
   <h2>Add a repository</h2>
-  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its first assigned agent. Choosing <strong>the server</strong> is for storage only the server can reach: the server creates it with its own engine, maintains it, and no agent is assigned until you assign one under Manage (which makes that agent open it first); an SFTP key path is then a path inside the server container, and a filesystem repository needs its path on the server. The SFTP path and S3 prefix start as <span class="mono">&lt;agent-id&gt;-backup</span> so unrelated data never shares a directory; change it if you want a different layout. Only the fields for the selected kind are used.</p>
+  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its first assigned agent. Choosing <strong>the server</strong> is for storage only the server can reach: the server creates it with its own engine, maintains it, and no agent is assigned until you assign one under Manage (which makes that agent open it first); an SFTP key path is then a path inside the server container, and a filesystem repository needs its path on the server. The SFTP path and S3 prefix start as <span class="mono">&lt;hostname&gt;-&lt;first 6 characters of the agent ID&gt;-backup</span>, readable and still unique to that agent, so unrelated data never shares a directory; change it if you want a different layout. Only the fields for the selected kind are used.</p>
   {{if and (not .Agents) (not .ServerEngine)}}<div class="card"><div class="empty">Register and approve an agent first.</div></div>{{else}}
   <div class="card">
     <form class="grid" method="post" action="/repositories">
@@ -119,7 +125,7 @@
         </select>
       </label>
       <label>Initialize on agent
-        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}{{if .ServerEngine}}<option value="server" {{if eq "server" $sel}}selected{{end}}>the server (storage only it can reach)</option>{{end}}</select>
+        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" data-host="{{.Hostname}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}{{if .ServerEngine}}<option value="server" data-host="voidgrid-server" {{if eq "server" $sel}}selected{{end}}>the server (storage only it can reach)</option>{{end}}</select>
       </label>
       <label>Repository password <input name="password" type="password" autocomplete="new-password" placeholder="leave blank to generate one"></label>
       <label class="check wide"><input type="checkbox" name="ecc" {{if .Form.Get "ecc"}}checked{{end}}> Reed-Solomon error correction (bitrot protection, ~2% overhead; can't be added later)</label>
@@ -159,7 +165,7 @@
   </div>
   {{end}}
   <script>
-  // New repositories default to their own directory, named after the agent that
+  // New repositories default to their own directory, named after the host that
   // creates them, so a shared storage account never mixes unrelated data. Only
   // an empty (or still defaulted) field is filled; nothing typed is overwritten.
   (function () {
@@ -168,8 +174,16 @@
     var agent = f.querySelector('select[name=agent]');
     var fields = ["sftp_path", "s3_prefix"].map(function (n) { return f.querySelector("[name=" + n + "]"); }).filter(Boolean);
     var last = {};
+    // <hostname>-<first 6 of the agent ID>: readable, and unique because the ID
+    // is. Without a hostname the whole ID stands alone; the server has no ID.
+    function stem() {
+      var opt = agent.options[agent.selectedIndex];
+      var host = ((opt && opt.dataset.host) || "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+      if (!host) return agent.value;
+      return agent.value === "server" ? host : host + "-" + agent.value.slice(0, 6);
+    }
     function fill() {
-      var want = agent.value + "-backup";
+      var want = stem() + "-backup";
       fields.forEach(function (el) {
         if (el.value === "" || el.value === last[el.name]) { el.value = want; last[el.name] = want; }
       });

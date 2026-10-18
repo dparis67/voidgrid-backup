@@ -12,6 +12,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
+	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 )
 
 // serverOnlyRepo sets a job up whose repository the server can open (through
@@ -239,5 +240,85 @@ func TestDeleteAJobWithItsSnapshotsWhenItsAgentIsDown(t *testing.T) {
 	er, _ := serverRepo(repo)
 	if left, err := c.Engine.ListSnapshotsOf(ctx, er, job.AgentID, nil); err != nil || len(left) != 0 {
 		t.Fatalf("the snapshots are still in the repository: %d %v", len(left), err)
+	}
+}
+
+func TestServerReachNoteOnTheCard(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	repo, _ := c.Catalog.Repository(ctx, job.RepositoryID)
+
+	// A server with no engine says nothing at all.
+	if text, _ := c.ServerReachNote(ctx, repo); text != "" {
+		t.Fatalf("a note without an engine: %q", text)
+	}
+	withServerEngine(t, c)
+
+	// A filesystem directory with no path on the server is a warning at once.
+	text, warn := c.ServerReachNote(ctx, repo)
+	if !warn || !strings.Contains(text, "The server cannot open this repository") {
+		t.Fatalf("an unmapped directory: %q warn=%v", text, warn)
+	}
+
+	// Mapped but never checked: a plain line pointing at Check access.
+	cfg := repo.Config
+	f := *cfg.Filesystem
+	f.ServerPath = f.Path
+	cfg.Filesystem = &f
+	if err := c.Catalog.UpdateRepositoryConfig(ctx, repo.ID, cfg); err != nil {
+		t.Fatal(err)
+	}
+	repo, _ = c.Catalog.Repository(ctx, repo.ID)
+	if text, warn = c.ServerReachNote(ctx, repo); warn || !strings.Contains(text, "not been checked") {
+		t.Fatalf("not checked yet: %q warn=%v", text, warn)
+	}
+
+	// Checked and fine.
+	if _, err := c.CheckReach(ctx, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if text, warn = c.ServerReachNote(ctx, repo); warn || !strings.Contains(text, "The server can open this repository (checked") {
+		t.Fatalf("checked and reachable: %q warn=%v", text, warn)
+	}
+
+	// Checked and failing (the mapping now points nowhere): a warning with why.
+	f.ServerPath = filepath.Join(t.TempDir(), "gone")
+	cfg.Filesystem = &f
+	if err := c.Catalog.UpdateRepositoryConfig(ctx, repo.ID, cfg); err != nil {
+		t.Fatal(err)
+	}
+	repo, _ = c.Catalog.Repository(ctx, repo.ID)
+	if _, err := c.CheckReach(ctx, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if text, warn = c.ServerReachNote(ctx, repo); !warn || !strings.Contains(text, "could not open this repository when last checked") {
+		t.Fatalf("checked and unreachable: %q warn=%v", text, warn)
+	}
+
+	// The card shows it.
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	get(t, client, srv.URL+"/repositories", "could not open this repository when last checked")
+}
+
+func TestAddingARepositoryChecksTheServerInTheBackground(t *testing.T) {
+	ctx := context.Background()
+	c, job, _ := setupJob(t)
+	withServerEngine(t, c)
+	dir := filepath.Join(t.TempDir(), "viaagent")
+	cfg := repocfg.Config{Kind: repocfg.KindFilesystem, Filesystem: &repocfg.Filesystem{Path: dir, ServerPath: dir}}
+	repo, _, err := c.AddRepository(ctx, "viaagent", cfg, "", job.AgentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; ; i++ {
+		if text, _ := c.ServerReachNote(ctx, repo); strings.Contains(text, "The server can open this repository (checked") {
+			return
+		}
+		if i > 400 {
+			t.Fatal("the server was never checked after the repository was added")
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 }

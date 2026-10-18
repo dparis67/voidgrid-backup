@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
@@ -180,5 +181,26 @@ func TestEditAFilesystemRepositoryIsNotDoneThroughTheServer(t *testing.T) {
 	}
 	if got, _ := c.Catalog.Repository(ctx, repo.ID); got.Config.Filesystem.Path != repo.Config.Filesystem.Path {
 		t.Fatal("a refused edit changed the saved path")
+	}
+}
+
+func TestAddFormDefaultsThePathFromTheHostname(t *testing.T) {
+	c, job, _ := setupJob(t)
+	ag, err := c.Catalog.Agent(context.Background(), job.AgentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Catalog.RecordSeen(context.Background(), ag.ID, time.Now(), "harbinger", "v", nil); err != nil {
+		t.Fatal(err)
+	}
+	withServerEngine(t, c)
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	page := get(t, client, srv.URL+"/repositories", "Add a repository")
+	for _, want := range []string{`data-host="harbinger"`, `data-host="voidgrid-server"`, "first 6 characters of the agent ID", `agent.value.slice(0, 6)`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the add form is missing %q", want)
+		}
 	}
 }
