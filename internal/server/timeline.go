@@ -138,11 +138,12 @@ type timelinePage struct {
 	Unscheduled []string
 
 	Zooms            []tlZoom
-	Earlier, Later   string // links that move the window by its own length
-	NowHref          string // back to the window that starts at the current hour
-	FromValue        string // the start, for the time field
-	Range            string // the window in words
-	SpanMin, StepMin int    // the window's length and a drag's snap, in minutes
+	Earlier, Later   string    // links that move the window by its own length
+	NowHref          string    // back to the window that starts at the current hour
+	FromValue        string    // the start, for the time field
+	Range            string    // the window in words
+	SpanMin, StepMin int       // the window's length and a drag's snap, in minutes
+	Plan             *planView // the proposed plan, when asked for (?plan=1)
 }
 
 // tlHref is the address of the Schedule page for a lane grouping and a window
@@ -192,29 +193,15 @@ func (u *ui) schedule(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("by") == "repo" {
 		by = "repo"
 	}
-	jobs, err := u.c.Catalog.ListJobs(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	agents, err := u.c.Catalog.ListAgents(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	repos, err := u.c.Catalog.ListRepositories(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	rows := make([]jobRow, 0, len(jobs))
-	for _, j := range jobs {
-		rows = append(rows, u.jobRow(ctx, j, agents, repos))
-	}
 	now := time.Now()
+	rows, maints, err := u.scheduleRows(ctx, now)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	view, explicit := parseView(r.URL.Query(), now)
 	p := timelinePage{base: u.newBase("Schedule", "schedule", r), By: by}
-	p.Lanes, p.Ticks, p.Now, p.Unscheduled = buildTimeline(rows, u.c.maintSlots(ctx, repos, jobs, agents, now), by, now, view)
+	p.Lanes, p.Ticks, p.Now, p.Unscheduled = buildTimeline(rows, maints, by, now, view)
 	p.ShowNow = !now.Before(view.From) && now.Before(view.From.Add(view.Span))
 	p.SpanMin, p.StepMin = view.minutes(), tlScale[view.minutes()].stepMin
 	var start *time.Time
@@ -227,6 +214,10 @@ func (u *ui) schedule(w http.ResponseWriter, r *http.Request) {
 	earlier, later := view.From.Add(-view.Span), view.From.Add(view.Span)
 	p.Earlier, p.Later = tlHref(by, view.minutes(), &earlier), tlHref(by, view.minutes(), &later)
 	p.NowHref = tlHref(by, view.minutes(), nil)
+	if r.URL.Query().Get("plan") == "1" {
+		pv := u.buildPlan(ctx, rows, maints, now)
+		p.Plan = &pv
+	}
 	p.FromValue = view.From.Format(fromLayout)
 	p.Range = view.From.Format("Mon 2 Jan 15:04") + " to " + view.From.Add(view.Span).Format("Mon 2 Jan 15:04")
 	u.render(w, http.StatusOK, "schedule", p)

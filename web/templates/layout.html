@@ -300,6 +300,35 @@
   });
 })();
 </script>
+<script>
+// Add-job forms: prefill the schedule with a start that is free on the chosen
+// agent and repository, and say why. The field is only replaced while it still
+// holds what was suggested (or the page's default), so nothing typed is lost.
+(function () {
+  Array.prototype.forEach.call(document.querySelectorAll("input[data-suggest]"), function (field) {
+    var form = field.form;
+    if (!form) return;
+    var agent = form.querySelector("[name=agent]"), repo = form.querySelector("[name=repository]");
+    var note = form.querySelector("[data-suggest-note]");
+    var last = field.value;
+    function ask() {
+      if (!agent || !repo || !agent.value || !repo.value) return;
+      var url = "/api/suggest-schedule?agent=" + encodeURIComponent(agent.value) + "&repository=" + encodeURIComponent(repo.value);
+      fetch(url, { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("status " + r.status)); })
+        .then(function (d) {
+          if (field.value === last || field.value === "") { field.value = d.schedule; last = d.schedule; }
+          if (note) { note.textContent = d.text; note.className = "hint" + (d.clash ? " warn" : ""); }
+        })
+        .catch(function () {});
+    }
+    if (agent) agent.addEventListener("change", ask);
+    if (repo) repo.addEventListener("change", ask);
+    // The jobs page fills the repository list after the agent is chosen.
+    setTimeout(ask, 50);
+  });
+})();
+</script>
 </body>
 </html>
 {{end}}

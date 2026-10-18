@@ -54,6 +54,7 @@ func NewHandler(c *Controller) http.Handler {
 		"child":    func(dir, name string) string { return strings.TrimPrefix(path.Join(dir, name), "/") },
 		"unixTime": func(s int64) time.Time { return time.Unix(s, 0) },
 		"list":     func(s ...string) []string { return s },
+		"todText":  todText,
 	}).ParseFS(web.FS, "templates/*.html"))}
 
 	mux := http.NewServeMux()
@@ -117,6 +118,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /jobs/vm", u.addVMJob)
 	mux.HandleFunc("POST /jobs/{id}/snapshots/{sid}/restore-vm", u.restoreVM)
 	mux.HandleFunc("GET /api/agents/{id}/usage", u.apiUsage)
+	mux.HandleFunc("GET /api/suggest-schedule", u.apiSuggestSchedule)
+	mux.HandleFunc("POST /schedule/plan/apply", u.applySchedulePlan)
 	mux.HandleFunc("GET /api/agents", u.apiAgents)
 	mux.HandleFunc("GET /api/repositories", u.apiRepositories)
 	mux.HandleFunc("GET /api/jobs", u.apiJobs)

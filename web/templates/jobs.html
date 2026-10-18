@@ -38,7 +38,7 @@
   <div class="card">
     <form class="grid" method="post" action="/jobs">
       <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
-      <label>Schedule (cron in {{$.TZ}}) <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *"></label>
+      <label>Schedule (cron in {{$.TZ}}) <input name="schedule" class="mono" value="{{.Form.Get "schedule"}}" placeholder="0 3 * * *" data-suggest><span class="hint" data-suggest-note></span></label>
       <label>Agent
         <select name="agent" id="job-agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
       </label>

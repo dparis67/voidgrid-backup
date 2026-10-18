@@ -650,6 +650,33 @@ job. The line marks now, and bars that have already started are dimmed.
   is out of date is refused, so it can't overwrite a newer edit.
 - Manual and switched-off jobs are listed under the timeline.
 
+#### Suggesting start times
+
+Both of these only suggest; nothing changes until you save or press Apply.
+
+- **New jobs.** The add-job forms (Jobs, and each agent's stacks and VMs pages)
+  prefill the Schedule field with the earliest start that overlaps nothing on
+  the chosen agent and repository, and say so under the field. It follows the
+  agent and repository you pick, and it only replaces the field while you have
+  not typed in it. A job that has never run is assumed to take 15 minutes, so
+  this is a guess: **a backup job needs to run at least twice before its time
+  can be placed accurately**, because the first run uploads everything and is by
+  far the longest. Once it has, use the plan below.
+- **Suggest a plan** (a button under the timeline) proposes start times for the
+  jobs on a schedule of one start a day, every day (`30 3 * * *`). The rules:
+  start between 00:00 and 07:00 in the server's time zone, one job at a time on
+  an agent (they queue behind each other anyway), at most two at once on a
+  repository (a Storage Box allows about ten connections in all), a 10 minute
+  gap after each job, longest first. Maintenance cycles and jobs on any other
+  schedule (weekdays only, several a day, ranges) stay where they are and are
+  worked around. A job that already fits stays put, so the plan is stable:
+  asking again changes nothing until a length or a schedule changes. The plan
+  lists only the jobs that would move, with each one's length (flagged as a
+  guess while it has fewer than two finished backups), **Apply** per job or
+  **Apply all**. A job whose schedule changed since the plan was drawn is
+  skipped, not overwritten. When the window has no free gap for a job it is
+  placed where it clashes least and marked.
+
 ### Notifications
 
 One server-wide setting, not per-job: a **scheduled** job that finishes

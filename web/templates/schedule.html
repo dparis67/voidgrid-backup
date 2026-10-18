@@ -45,6 +45,41 @@
   </div>
   {{if .Unscheduled}}<p class="hint">Not on the timeline (manual or off): {{join .Unscheduled ", "}}.</p>{{end}}
   </div>
+  <h2 id="plan">Plan</h2>
+  {{if .Plan}}
+  <p class="hint">Proposed start times. Rules: start between {{.Plan.Window}} ({{.TZ}}), one job at a time on an agent, at most {{.Plan.RepoCap}} at once on a repository, a {{.Plan.BufferMin}} minute gap after each job, longest jobs first. Maintenance cycles and the {{.Plan.Fixed}} job(s) on other schedules stay where they are, and a job is only moved when its time clashes or is outside the window. Nothing changes until you press Apply.</p>
+  {{if .Plan.Guesses}}<p class="hint warn">{{.Plan.Note}}</p>{{end}}
+  {{if .Plan.Moves}}
+  <div class="card">
+    <table>
+      <thead><tr><th>Job</th><th>Agent</th><th>Repository</th><th>Now</th><th>Proposed</th><th>Length</th><th>Note</th><th></th></tr></thead>
+      <tbody>
+      {{range .Plan.Moves}}
+        <tr>
+          <td><a href="/jobs/{{.ID}}">{{.Name}}</a></td>
+          <td>{{.Agent}}</td>
+          <td>{{.Repo}}</td>
+          <td class="mono">{{todText .Tod}}</td>
+          <td class="mono"><strong>{{todText .NewTod}}</strong></td>
+          <td>{{.Length}}</td>
+          <td>{{if .Clash}}<span class="warn">no free gap in the window</span>{{end}}{{if .Guess}} <span class="muted">length is a guess ({{.Runs}} run{{if ne .Runs 1}}s{{end}})</span>{{end}}</td>
+          <td><form method="post" action="/schedule/plan/apply"><input type="hidden" name="move" value="{{.MoveLine}}"><button class="plain" type="submit">Apply</button></form></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/schedule/plan/apply" class="row" style="margin-top:10px">
+    {{range .Plan.Moves}}<input type="hidden" name="move" value="{{.MoveLine}}">{{end}}
+    <button type="submit">Apply all {{len .Plan.Moves}}</button>
+    <span class="muted">{{.Plan.Kept}} job(s) already fit and stay.</span>
+  </form>
+  {{else}}<p>Nothing to move: the {{.Plan.Kept}} job(s) that can be placed already fit.</p>{{end}}
+  <p><a href="/schedule{{if eq .By "repo"}}?by=repo{{end}}">Hide the plan</a></p>
+  {{else}}
+  <p class="hint">Proposes start times that do not overlap, from how long each job takes. A job needs to have run at least twice for its length to be reliable.</p>
+  <p><a href="/schedule?plan=1{{if eq .By "repo"}}&amp;by=repo{{end}}#plan"><button class="plain" type="button">Suggest a plan</button></a></p>
+  {{end}}
   <div id="live" data-ids="tl" data-every="60000" hidden></div>
   <script>
   // Drag a movable bar to change its job's time of day. The server shifts the
