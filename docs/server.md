@@ -285,7 +285,7 @@ the agent that runs Kopia's compaction and garbage collection.
 | Kind | Fields | Notes |
 |---|---|---|
 | SFTP | host, port, user, path, key file or password, known_hosts | Hetzner Storage Box: port `23`, user `uXXXXXX`, a path relative to its home such as `backups/homelab`. The key file is a path **inside the agent** (e.g. `/keys/sftp_key`). Leave known_hosts empty to trust the key seen on first connect; it is pinned from then on. |
-| S3 | endpoint, bucket, prefix, region, access key, secret | "Plain HTTP" only for a local test server. |
+| S3 | endpoint, bucket, prefix, region, access key, secret | "Plain HTTP" only for a local test server. Only tested against Backblaze B2's S3 API, on a free account: see [testing.md](testing.md). |
 | Filesystem | directory on the agent host | A local disk or a mount on that agent. |
 
 - **Password**: leave it blank to have one generated. It is shown **once**.
@@ -406,10 +406,9 @@ the access key and secret can be edited. This is deliberate, not an omission.
   nothing in the repository says which is complete. A safe move would have to
   copy, verify every object, switch the settings and only then delete, and be
   able to resume after a failure.
-- **Deleting does not always free the space.** On a bucket that keeps old
-  versions (Backblaze B2 does by default) deleting the originals only hides
-  them until a lifecycle rule removes them, so a move can double what you pay
-  for until then. Copy and request costs depend on the provider.
+- **Deleting does not always free the space.** On a bucket set to keep old
+  versions, deleting the originals only hides them until a lifecycle rule
+  removes them, so a move can double what you pay for until then. Copy and request costs depend on the provider.
 - **A different bucket or endpoint** is a copy to different storage, not a
   rename.
 

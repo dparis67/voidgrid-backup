@@ -2,9 +2,10 @@
 # Live S3 suites against a real S3-compatible bucket (e.g. Backblaze B2's
 # S3-compatible endpoint), using credentials from .env at the repo root:
 # TestLiveS3Suite (the engine) and TestLiveS3Server (the server, with a real
-# in-process agent). Both use a few kilobytes of fake data and make a few hundred
-# requests in all, to stay inside a free account's daily allowance; check the
-# provider's usage page after a run. Everything the tests write goes under a
+# in-process agent). Both use a few kilobytes of fake data and one repository
+# each, to stay inside a free account's daily allowance; the number of requests
+# a run makes has not been measured, so check the provider's usage page after a
+# run. Everything the tests write goes under a
 # fresh, per-run prefix that they delete when they are done, pass or fail;
 # nothing else in the bucket is touched, and nothing here is printed.
 #
