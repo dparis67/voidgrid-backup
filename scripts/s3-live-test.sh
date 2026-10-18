@@ -1,9 +1,12 @@
 #!/bin/sh
-# Live backup test against a real S3-compatible bucket (e.g. Backblaze B2's
-# S3-compatible endpoint), using credentials from .env at the repo root.
-# Everything the test writes goes under a fresh, per-run prefix that the
-# test itself deletes when it's done, pass or fail; nothing else in the
-# bucket is touched, and nothing here is printed.
+# Live S3 suites against a real S3-compatible bucket (e.g. Backblaze B2's
+# S3-compatible endpoint), using credentials from .env at the repo root:
+# TestLiveS3Suite (the engine) and TestLiveS3Server (the server, with a real
+# in-process agent). Both use a few kilobytes of fake data and make a few hundred
+# requests in all, to stay inside a free account's daily allowance; check the
+# provider's usage page after a run. Everything the tests write goes under a
+# fresh, per-run prefix that they delete when they are done, pass or fail;
+# nothing else in the bucket is touched, and nothing here is printed.
 #
 # .env must define (copy env.example at the repo root to .env):
 #   B2_ENDPOINT      host only, no scheme, e.g. s3.us-west-004.backblazeb2.com
@@ -53,4 +56,4 @@ docker run --rm -i \
   -e VB_LIVE_S3_ENDPOINT="$endpoint" -e VB_LIVE_S3_BUCKET="$bucket" \
   -e VB_LIVE_S3_REGION="$region" -e VB_LIVE_S3_ACCESS_KEY="$B2_KEY_ID" \
   -e VB_LIVE_S3_SECRET_KEY="$B2_KEY_KEY" -e VB_LIVE_S3_PREFIX="$prefix" \
-  golang:1.27 go test -count=1 -tags s3live -run TestLiveS3Backup -v ./internal/engine/
+  golang:1.27 go test -count=1 -timeout 20m -tags s3live -run TestLiveS3 -v ./internal/engine/ ./internal/server/
