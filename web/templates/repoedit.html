@@ -1,0 +1,26 @@
+{{define "repoedit"}}{{template "top" .}}
+  <h2>Edit {{.Repo.Name}}</h2>
+  <p class="hint">Currently <span class="mono">{{.Repo.Config.Location}}</span>. Blank fields keep what is stored; passwords and secrets are never shown. The kind, host, port, user and the repository password cannot change here: that would be a different repository.</p>
+  <div class="card">
+    <form class="grid" method="post" action="/repositories/{{.Repo.ID}}/edit">
+      {{if .Repo.Config.SFTP}}
+      <label class="wide">Path on the storage <input class="mono" name="sftp_path" value="{{if .Form.Get "sftp_path"}}{{.Form.Get "sftp_path"}}{{else}}{{.Repo.Config.SFTP.Path}}{{end}}" required></label>
+      <p class="hint wide"><strong>A new path moves the repository's data</strong> on the storage to that path (one directory rename), tests that it opens there and is the same repository, and only then saves it. If the test fails the data is moved back. Nothing may be running on the repository, and the move waits for the chosen agent's current operation. The first backup afterwards keeps its cache.</p>
+      <label>Private key file (path on the agent) <input class="mono" name="sftp_key_file" value="{{.Form.Get "sftp_key_file"}}" placeholder="{{.Repo.Config.SFTP.KeyFile}}"></label>
+      <label>SFTP password <input name="sftp_password" type="password" autocomplete="off" placeholder="blank keeps the stored one"></label>
+      <label class="wide">known_hosts (blank keeps the pinned host key)
+        <textarea name="sftp_known_hosts">{{.Form.Get "sftp_known_hosts"}}</textarea></label>
+      {{end}}
+      {{if .Repo.Config.S3}}
+      <label>Access key ID <input name="s3_access_key" value="{{if .Form.Get "s3_access_key"}}{{.Form.Get "s3_access_key"}}{{else}}{{.Repo.Config.S3.AccessKeyID}}{{end}}"></label>
+      <label>Secret access key <input name="s3_secret" type="password" autocomplete="off" placeholder="blank keeps the stored one"></label>
+      <p class="hint wide">The bucket and prefix cannot change, so an S3 repository is never moved.</p>
+      {{end}}
+      {{if .Repo.Config.Filesystem}}
+      <label class="wide">Directory on the agent host <input class="mono" name="fs_path" value="{{if .Form.Get "fs_path"}}{{.Form.Get "fs_path"}}{{else}}{{.Repo.Config.Filesystem.Path}}{{end}}" required></label>
+      <p class="hint wide"><strong>A new directory moves the repository's data</strong> there (a rename on the same filesystem), tests it, and only then saves. If the test fails the data is moved back.</p>
+      {{end}}
+      <div class="actions row"><button type="submit">Save</button> <a href="/repositories">Cancel</a></div>
+    </form>
+  </div>
+{{template "bottom" .}}{{end}}

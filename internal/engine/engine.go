@@ -369,7 +369,12 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 		uploadStart := time.Now()
 		err = around(func() error {
 			var err error
-			man, err = upload.NewUploader(w).Upload(ctx, entry, tree, si, prev...)
+			progress := &upload.CountingUploadProgress{}
+			stop := logProgress(si.Path, progress)
+			defer stop()
+			u := upload.NewUploader(w)
+			u.Progress = progress
+			man, err = u.Upload(ctx, entry, tree, si, prev...)
 			return err
 		})
 		res.Timings.Upload = time.Since(uploadStart)
@@ -689,6 +694,7 @@ func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
 		if err != nil {
 			return nil, fmt.Errorf("connect to repository: %w", err)
 		}
+		e.adoptCache(ctx, r, dir, cfgFile)
 	} else if err != nil {
 		return nil, err
 	}
@@ -699,6 +705,7 @@ func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
+	recordIdentity(dir, rep)
 	return rep, nil
 }
 

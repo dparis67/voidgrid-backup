@@ -76,6 +76,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /agents/{id}/rename", u.renameAgent)
 	mux.HandleFunc("GET /repositories", u.repositories)
 	mux.HandleFunc("POST /repositories", u.addRepository)
+	mux.HandleFunc("GET /repositories/{id}/edit", u.editRepositoryForm)
+	mux.HandleFunc("POST /repositories/{id}/edit", u.editRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)

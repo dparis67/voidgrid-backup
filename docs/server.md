@@ -321,6 +321,34 @@ histories and retention never touch each other.
   in-process agents on a local filesystem repository, not against a real
   Storage Box or S3.
 
+#### Editing a repository
+
+**Edit...** on a repository's card changes its location or credentials: the
+SFTP path, key file, password and known_hosts; the S3 access key and secret;
+or the filesystem directory. The kind, host, port, user, bucket, endpoint,
+prefix and the Kopia password cannot change, because that would be a different
+repository. A blank field keeps what is stored, and secrets are never shown.
+
+- **A new path moves the data.** Kopia's blobs are relative to the storage
+  path, so the repository is moved with one directory rename on the storage
+  (SFTP, or a filesystem rename on the same filesystem; never S3). The server
+  asks an agent that uses the repository to open it first and remember its
+  identity, move it, open it at the new path and confirm it is the same
+  repository. Only then is the new path saved. If any step after the move
+  fails the data is moved back; if even that fails the error says where the
+  data is. A destination that already exists is refused.
+- **Nothing may be running** on the repository: a backup, maintenance,
+  measuring or a wipe refuses the edit, and the edit holds those off until it
+  ends. The move waits for the chosen agent's current operation.
+- **The cache follows.** An agent that finds an earlier connection to the same
+  repository under other settings takes over its Kopia cache (keyed by blob
+  ID, so still valid) and drops the old connection, so the first backup after
+  an edit is as fast as the one before it. The old settings, including any
+  secrets, are not kept.
+- Another agent that uses the repository needs nothing: it connects with the
+  new settings on its next run. Update the connection details you recorded for
+  recovery.
+
 #### Maintenance
 
 Maintenance (compaction and garbage collection) is run by the repository's

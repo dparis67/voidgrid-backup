@@ -13,92 +13,90 @@
 
   <h2>Repositories</h2>
   <div id="repo-table">
-  <div class="card">
-    {{if .Repos}}
-    <table>
-      <thead><tr><th>Name</th><th>Kind</th><th>Location</th><th>Bitrot ECC</th><th>Jobs</th><th>Agents</th><th>Stored</th><th>Initialized</th><th>Maintenance</th><th></th></tr></thead>
-      <tbody>
-      {{range .Repos}}
-        <tr>
-          <td>{{.Name}}</td>
-          <td>{{.Config.Kind}}</td>
-          <td class="mono">{{.Location}}{{if .Config.Filesystem}}
-            <div class="hint">Local path on the agent.{{if .Config.Filesystem.ServerPath}} The server sees it at <span class="mono">{{.Config.Filesystem.ServerPath}}</span>.{{else}} The server can maintain it only if the same directory is mounted in the server container (set below).{{end}}</div>{{end}}</td>
-          <td>{{if .Config.ECC}}<span class="ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
-          <td class="num">{{.Jobs}}</td>
-          <td>
-            {{$r := .}}
-            {{range .Assigned}}<div>{{.Name}} {{if .Default}}<span class="muted" title="New jobs on this agent start with this repository">default</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/default" style="display:inline"><button class="plain" type="submit" title="Start new jobs on this agent with this repository">Make default</button></form>{{end}} {{if .Jobs}}<span class="muted">{{.Jobs}} job(s)</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/remove" style="display:inline"><button class="plain" type="submit">Unassign</button></form>{{end}}</div>{{else}}<span class="muted">none</span>{{end}}
-            {{if and (gt (len .Assigned) 1) (eq .MaintBy "agent")}}<div class="hint">Shared by several agents: let the server maintain it (Maintainer…).</div>{{end}}
-            {{if not .InitializedAt.IsZero}}
-            <details>
-              <summary>Assign an agent…</summary>
-              <form method="post" action="/repositories/{{.ID}}/agents">
-                <p class="hint">The agent opens the repository first (it never creates anything) and is assigned only if that works. Picking an agent that is already assigned tests it again{{if eq .Config.Kind "sftp"}} or changes its key{{end}}. Only assigned agents can get new jobs on this repository.</p>
-                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-                {{if eq .Config.Kind "sftp"}}<label>Key file on that agent <input class="mono" name="key_file" placeholder="{{.Config.SFTP.KeyFile}}"></label>
-                <p class="hint">Blank uses the repository's key path. Give each agent its own key, authorized for the same user on the SFTP server.</p>{{end}}
-                <button class="plain" type="submit">Test and assign</button>
-              </form>
-            </details>
-            {{end}}
-          </td>
-          <td>
-            {{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}</span>{{else}}<span class="muted">not measured</span>{{end}}
-            {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" style="display:inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}
-          </td>
-          <td>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</td>
-          <td>
-            {{if .Maintaining}}<span class="running">running…</span>
-            {{else if .Maint}}{{if not .Maint.LastRun.IsZero}}<span class="{{if eq .Maint.Status "ok"}}ok{{else}}bad{{end}}">{{.Maint.Status}}</span> {{ago .Maint.LastRun}}{{else}}<span class="muted">not run yet</span>{{end}}
-              {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
-              {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
-              {{with .MaintRuns}}<details><summary class="muted">took {{tookMaint (index . 0)}}{{if (index . 0).Queued}} (queued {{(index . 0).Queued.Round 1000000000}}){{end}}; history</summary>
-                <table><thead><tr><th>Started</th><th>On</th><th>Status</th><th>Took</th><th>Queued</th></tr></thead><tbody>
-                {{range .}}<tr><td>{{when .StartedAt}}</td><td>{{.AgentID}}</td><td><span class="{{if eq .Status "ok"}}ok{{else}}bad{{end}}">{{.Status}}</span></td><td>{{tookMaint .}}</td><td>{{if .Queued}}{{.Queued.Round 1000000000}}{{else}}-{{end}}</td></tr>
-                {{if .Error}}<tr><td></td><td colspan="4" class="err">{{.Error}}</td></tr>{{end}}{{end}}
-                </tbody></table></details>{{end}}
-            {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
-            <div class="muted">maintained by {{.MaintBy}}</div>
-            {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" style="display:inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}
-          </td>
-          <td>
-            {{if and (not .InitializedAt.IsZero) (not .Wiping)}}
-            <details>
-              <summary>Maintainer…</summary>
-              <form method="post" action="/repositories/{{.ID}}/maintainer">
-                <p class="hint">Who runs maintenance (compaction and cleanup). The default is the agent that owns the repository; the server can take over, which keeps working when agents are replaced. It must be able to open the repository itself, with nothing running on it.</p>
-                <select name="who"><option value="server" {{if eq .MaintBy "agent"}}selected{{end}}>server</option><option value="agent" {{if eq .MaintBy "server"}}selected{{end}}>an agent</option></select>
-                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select> <span class="muted">(agent, when handing back)</span>
-                {{if .Config.Filesystem}}<label>Path on the server (optional) <input class="mono" name="server_path" value="{{.Config.Filesystem.ServerPath}}" placeholder="/mnt/backup/homelab"></label>{{end}}
-                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Change</button>
-              </form>
-            </details>
-            {{end}}
-            {{if .Wiping}}<span class="running">wiping…</span>{{else}}
-            {{if .WipeError}}<div class="err">{{.WipeError}}</div>{{end}}
-            <details>
-              <summary>Remove…</summary>
-              {{if .Jobs}}<p class="hint">{{.Jobs}} job(s) still use this repository. Delete them first.</p>{{else}}
-              <form method="post" action="/repositories/{{.ID}}/remove">
-                <p class="hint"><strong>Remove from the server.</strong> The data in storage stays; add the repository again with its password to use it.</p>
-                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Remove</button>
-              </form>
-              <form method="post" action="/repositories/{{.ID}}/wipe">
-                <p class="hint"><strong>Wipe all its data.</strong> Deletes every backup in this repository from storage and cannot be undone. Space is freed at once. Pick an agent that can reach the storage.</p>
-                <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-                <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Wipe</button>
-              </form>
-              {{end}}
-            </details>
-            {{end}}
-          </td>
-        </tr>
-      {{end}}
-      </tbody>
-    </table>
-    {{else}}<div class="empty">No repositories yet.</div>{{end}}
+  {{if .Repos}}{{range .Repos}}{{$r := .}}
+  <div class="card repo">
+    <div class="repo-head">
+      <span class="fold-name">{{.Name}}</span>
+      <span class="tag muted">{{.Config.Kind}}</span>
+      {{if .Config.ECC}}<span class="tag ok" title="Reed-Solomon error correction (bitrot protection)">ECC</span>{{end}}
+      {{if .InitializedAt.IsZero}}<span class="tag warn">not initialized</span>{{end}}
+      {{if .Wiping}}<span class="tag running">wiping…</span>{{end}}
+      {{if and (not .InitializedAt.IsZero) (not .Wiping)}}<a class="repo-edit" href="/repositories/{{.ID}}/edit">Edit…</a>{{end}}
+    </div>
+    <div class="repo-loc mono">{{.Location}}{{if .Config.Filesystem}}
+      <div class="hint">Local path on the agent.{{if .Config.Filesystem.ServerPath}} The server sees it at <span class="mono">{{.Config.Filesystem.ServerPath}}</span>.{{else}} The server can maintain it only if the same directory is mounted in the server container (set under Manage).{{end}}</div>{{end}}</div>
+
+    <dl class="repo-facts">
+      <div><dt>Jobs</dt><dd>{{.Jobs}}</dd></div>
+      <div><dt>Initialized</dt><dd>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</dd></div>
+      <div><dt>Stored</dt>
+        <dd>{{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}</span>{{else}}<span class="muted">not measured</span>{{end}}
+          {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" class="inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}</dd></div>
+      <div><dt>Maintenance</dt>
+        <dd>{{if .Maintaining}}<span class="running">running…</span>
+          {{else if .Maint}}{{if not .Maint.LastRun.IsZero}}<span class="{{if eq .Maint.Status "ok"}}ok{{else}}bad{{end}}">{{.Maint.Status}}</span> {{ago .Maint.LastRun}}{{else}}<span class="muted">not run yet</span>{{end}}
+            {{if .Maint.Error}}<div class="err">{{.Maint.Error}}</div>{{end}}
+            {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
+          {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
+          <div class="muted">by {{.MaintBy}}</div>
+          {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" class="inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}</dd></div>
+    </dl>
+
+    <div class="repo-agents"><span class="muted">Agents</span>
+      {{range .Assigned}}<span class="chip">{{.Name}}
+        {{if .Default}}<span class="muted" title="New jobs on this agent start with this repository">default</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/default" class="inline"><button class="plain" type="submit" title="Start new jobs on this agent with this repository">Make default</button></form>{{end}}
+        {{if .Jobs}}<span class="muted">{{.Jobs}} job(s)</span>{{else}}<form method="post" action="/repositories/{{$r.ID}}/agents/{{.ID}}/remove" class="inline"><button class="plain" type="submit">Unassign</button></form>{{end}}</span>{{else}}<span class="muted">none</span>{{end}}
+    </div>
+    {{if and (gt (len .Assigned) 1) (eq .MaintBy "agent")}}<div class="hint repo-note">Shared by several agents: let the server maintain it (Manage, Maintainer).</div>{{end}}
+    {{if .WipeError}}<div class="err repo-note">{{.WipeError}}</div>{{end}}
+
+    {{with .MaintRuns}}<details class="repo-more"><summary class="muted">Maintenance history: last took {{tookMaint (index . 0)}}{{if (index . 0).Queued}} (queued {{(index . 0).Queued.Round 1000000000}}){{end}}</summary>
+      <table><thead><tr><th>Started</th><th>On</th><th>Status</th><th>Took</th><th>Queued</th></tr></thead><tbody>
+      {{range .}}<tr><td>{{when .StartedAt}}</td><td>{{.AgentID}}</td><td><span class="{{if eq .Status "ok"}}ok{{else}}bad{{end}}">{{.Status}}</span></td><td>{{tookMaint .}}</td><td>{{if .Queued}}{{.Queued.Round 1000000000}}{{else}}-{{end}}</td></tr>
+      {{if .Error}}<tr><td></td><td colspan="4" class="err">{{.Error}}</td></tr>{{end}}{{end}}
+      </tbody></table></details>{{end}}
+
+    {{if not .Wiping}}
+    <details class="repo-more">
+      <summary class="muted">Manage…</summary>
+      <div class="repo-sections">
+        {{if not .InitializedAt.IsZero}}
+        <form method="post" action="/repositories/{{.ID}}/agents">
+          <h3>Assign an agent</h3>
+          <p class="hint">The agent opens the repository first (it never creates anything) and is assigned only if that works. Picking an agent that is already assigned tests it again{{if eq .Config.Kind "sftp"}} or changes its key{{end}}. Only assigned agents can get new jobs on this repository.</p>
+          <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+          {{if eq .Config.Kind "sftp"}}<label>Key file on that agent <input class="mono" name="key_file" placeholder="{{.Config.SFTP.KeyFile}}"></label>
+          <p class="hint">Blank uses the repository's key path. Give each agent its own key, authorized for the same user on the SFTP server.</p>{{end}}
+          <button class="plain" type="submit">Test and assign</button>
+        </form>
+        <form method="post" action="/repositories/{{.ID}}/maintainer">
+          <h3>Maintainer</h3>
+          <p class="hint">Who runs maintenance (compaction and cleanup). The default is the agent that owns the repository; the server can take over, which keeps working when agents are replaced. It must be able to open the repository itself, with nothing running on it.</p>
+          <select name="who"><option value="server" {{if eq .MaintBy "agent"}}selected{{end}}>server</option><option value="agent" {{if eq .MaintBy "server"}}selected{{end}}>an agent</option></select>
+          <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select> <span class="muted">(agent, when handing back)</span>
+          {{if .Config.Filesystem}}<label>Path on the server (optional) <input class="mono" name="server_path" value="{{.Config.Filesystem.ServerPath}}" placeholder="/mnt/backup/homelab"></label>{{end}}
+          <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Change</button>
+        </form>
+        {{end}}
+        <div>
+          <h3>Remove</h3>
+          {{if .Jobs}}<p class="hint">{{.Jobs}} job(s) still use this repository. Delete them first.</p>{{else}}
+          <form method="post" action="/repositories/{{.ID}}/remove">
+            <p class="hint"><strong>Remove from the server.</strong> The data in storage stays; add the repository again with its password to use it.</p>
+            <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Remove</button>
+          </form>
+          <form method="post" action="/repositories/{{.ID}}/wipe">
+            <p class="hint"><strong>Wipe all its data.</strong> Deletes every backup in this repository from storage and cannot be undone. Space is freed at once. Pick an agent that can reach the storage.</p>
+            <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+            <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Wipe</button>
+          </form>
+          {{end}}
+        </div>
+      </div>
+    </details>
+    {{end}}
   </div>
+  {{end}}{{else}}<div class="card"><div class="empty">No repositories yet.</div></div>{{end}}
   </div>
   {{if .Measuring}}<div id="live" data-ids="repo-table" data-every="3000" hidden></div>{{end}}
 

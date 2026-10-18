@@ -2,9 +2,14 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 )
 
 func (a *Agent) DeleteSnapshot(ctx context.Context, req *agentpb.DeleteSnapshotRequest) (*agentpb.DeleteSnapshotResponse, error) {
@@ -69,6 +74,28 @@ func (a *Agent) TestRepository(ctx context.Context, req *agentpb.TestRepositoryR
 		return nil, err
 	}
 	return &agentpb.TestRepositoryResponse{Warnings: info.Warnings, RepositoryId: info.ID, Owner: info.Owner}, nil
+}
+
+// MoveRepository renames the repository's directory to the location in the
+// request. It waits for the agent's other operations, so nothing is reading
+// the repository while it moves.
+func (a *Agent) MoveRepository(ctx context.Context, req *agentpb.MoveRepositoryRequest) (*agentpb.MoveRepositoryResponse, error) {
+	r, err := toRepo(req.GetRepository())
+	if err != nil {
+		return nil, err
+	}
+	var to repocfg.Config
+	if err := json.Unmarshal(req.GetNewConfigJson(), &to); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "new repository config: %v", err)
+	}
+	a.opMu.Lock()
+	defer a.opMu.Unlock()
+	logStarted("repository move started", r.ID, "from", r.Config.Location(), "to", to.Location())
+	if err := a.engine.MoveRepository(ctx, r.Config, to); err != nil {
+		return nil, err
+	}
+	logStarted("repository moved", r.ID, "to", to.Location())
+	return &agentpb.MoveRepositoryResponse{}, nil
 }
 
 // TakeMaintenance makes this agent the repository's maintenance owner.

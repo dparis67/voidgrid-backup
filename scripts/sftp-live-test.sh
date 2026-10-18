@@ -63,4 +63,4 @@ docker run --rm -i \
   -e VB_LIVE_SFTP_HOST="$HETZNER_LINK" -e VB_LIVE_SFTP_PORT="$port" \
   -e VB_LIVE_SFTP_USER="$HETZNER_USER" -e VB_LIVE_SFTP_KEY_FILE="$key" \
   -e VB_LIVE_SFTP_PASSWORD="${HETZNER_PASSWORD:-}" -e VB_LIVE_SFTP_PATH="$path" \
-  golang:1.27 go test -count=1 -tags sftplive -run TestLiveSFTPBackup -v ./internal/engine/
+  golang:1.27 go test -count=1 -tags sftplive -run "TestLiveSFTP" -v ./internal/engine/

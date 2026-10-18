@@ -125,6 +125,22 @@
   .hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; padding: 14px; margin: 0; }
   dt { color: var(--muted); font-size: 13px; } dd { margin: 0; }
+  .repo { margin-bottom: 14px; }
+  .repo-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .repo-edit { margin-left: auto; }
+  .repo-loc { padding: 10px 14px 0; overflow-wrap: anywhere; }
+  dl.repo-facts { grid-template-columns: repeat(auto-fit, minmax(13em, 1fr)); gap: 14px 20px; }
+  .repo-facts dd { margin-top: 2px; }
+  .repo-agents { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 14px 12px; }
+  .chip { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--radius); }
+  .chip button.plain { padding: 1px 8px; font-size: 12px; }
+  .repo-note { padding: 0 14px 12px; margin: 0; }
+  details.repo-more { border-top: 1px solid var(--line); padding: 8px 14px; }
+  details.repo-more > summary { cursor: pointer; }
+  .repo-sections { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(20em, 1fr)); padding: 12px 0 4px; }
+  .repo-sections h3 { font-size: 14px; margin: 0 0 6px; }
+  .repo-sections form { display: grid; gap: 8px; align-content: start; }
+  .repo-sections form + form { margin-top: 14px; }
   @media (max-width: 700px) {
     form.grid, fieldset { grid-template-columns: 1fr; } .keep { grid-template-columns: repeat(3, 1fr); }
     main { padding: 16px; } header { padding: 12px 16px; }
