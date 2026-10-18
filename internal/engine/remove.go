@@ -16,6 +16,8 @@ import (
 	"github.com/kopia/kopia/repo/manifest"
 	"github.com/kopia/kopia/snapshot"
 	"github.com/kopia/kopia/snapshot/snapshotmaintenance"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // DeleteSnapshot forgets one snapshot. Only this agent's own snapshots can be
@@ -56,7 +58,7 @@ func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []stri
 	if err != nil {
 		return err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	ids := make([]manifest.ID, 0, len(snapshotIDs))
 	for _, sid := range snapshotIDs {
@@ -107,7 +109,7 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 	if err != nil {
 		return 0, 0, err
 	}
-	defer st.Close(ctx)
+	defer tidy.CloseCtx(ctx, "storage", st)
 
 	if _, err := st.GetMetadata(ctx, format.KopiaRepositoryBlobID); errors.Is(err, blob.ErrBlobNotFound) {
 		return 0, 0, errors.New("no repository was found at this location; nothing was deleted")
@@ -164,7 +166,7 @@ func (e *Engine) Maintain(ctx context.Context, r Repo) (ran bool, owner string, 
 	if err != nil {
 		return false, "", err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	dr, ok := rep.(repo.DirectRepository)
 	if !ok {
 		return false, "", errors.New("repository does not support maintenance")

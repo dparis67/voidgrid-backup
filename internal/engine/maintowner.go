@@ -5,6 +5,8 @@ import (
 
 	"github.com/kopia/kopia/repo"
 	"github.com/kopia/kopia/repo/maintenance"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // UsernameAtHost is the identity this engine has as a Kopia client, which is
@@ -22,7 +24,7 @@ func (e *Engine) MaintenanceOwner(ctx context.Context, r Repo) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	p, err := maintenance.GetParams(ctx, rep)
 	if err != nil {
 		return "", err
@@ -39,7 +41,7 @@ func (e *Engine) SetMaintenanceOwner(ctx context.Context, r Repo, owner string) 
 	if err != nil {
 		return err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	p, err := maintenance.GetParams(ctx, rep)
 	if err != nil {
 		return err

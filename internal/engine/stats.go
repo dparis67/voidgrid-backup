@@ -8,6 +8,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/fsusage"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // RepoStats is the space a repository occupies in its storage.
@@ -28,7 +29,7 @@ func (e *Engine) RepoStats(ctx context.Context, r Repo) (RepoStats, error) {
 	if err != nil {
 		return out, err
 	}
-	defer st.Close(ctx)
+	defer tidy.CloseCtx(ctx, "storage", st)
 	err = st.ListBlobs(ctx, "", func(bm blob.Metadata) error {
 		out.StoredBytes += bm.Length
 		out.Blobs++

@@ -267,7 +267,7 @@ func (e *Engine) Init(ctx context.Context, r Repo) (created bool, knownHosts str
 	if err != nil {
 		return false, "", err
 	}
-	defer st.Close(ctx)
+	defer tidy.CloseCtx(ctx, "storage", st)
 
 	opts := &repo.NewRepositoryOptions{}
 	if r.Config.ECC {
@@ -284,7 +284,7 @@ func (e *Engine) Init(ctx context.Context, r Repo) (created bool, knownHosts str
 	if err != nil {
 		return created, knownHosts, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	if created {
 		if err := claimMaintenance(ctx, rep); err != nil {
 			return created, knownHosts, fmt.Errorf("set maintenance owner: %w", err)
@@ -301,7 +301,7 @@ func (e *Engine) Backup(ctx context.Context, r Repo, paths, excludes []string, k
 	if err != nil {
 		return nil, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	opened := time.Since(t0)
 
 	results := make([]PathResult, 0, len(paths))
@@ -509,7 +509,7 @@ func (e *Engine) ListSnapshotsOf(ctx context.Context, r Repo, host string, paths
 	if err != nil {
 		return nil, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	var sources []snapshot.SourceInfo
 	if len(paths) == 0 {
@@ -561,7 +561,7 @@ func (e *Engine) ListDirectory(ctx context.Context, r Repo, snapshotID, rel stri
 	if err != nil {
 		return nil, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	entry, err := e.snapshotEntry(ctx, rep, snapshotID, rel)
 	if err != nil {
@@ -613,7 +613,7 @@ func (e *Engine) Restore(ctx context.Context, r Repo, snapshotID, rel, target st
 	if err != nil {
 		return RestoreStats{}, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	entry, err := e.snapshotEntry(ctx, rep, snapshotID, rel)
 	if err != nil {
@@ -713,7 +713,7 @@ func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
 			ClientOptions:  repo.ClientOptions{Hostname: e.hostname, Username: Username, ReadOnly: e.readOnly},
 			CachingOptions: e.cachingFor(dir),
 		})
-		st.Close(ctx)
+		tidy.CloseCtx(ctx, "storage", st)
 		if err != nil {
 			return nil, fmt.Errorf("connect to repository: %w", err)
 		}

@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // MaintenanceRun is one repository maintenance cycle.
@@ -35,7 +37,7 @@ func (c *Catalog) ListMaintenanceRuns(ctx context.Context, repoID string, limit 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []MaintenanceRun
 	for rows.Next() {
 		var m MaintenanceRun

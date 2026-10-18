@@ -22,6 +22,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/webauth"
 )
 
@@ -153,7 +154,7 @@ func (c *Controller) dialAgent(a catalog.Agent) (*grpc.ClientConn, error) {
 func (c *Controller) Check(ctx context.Context, a catalog.Agent) error {
 	conn, err := c.dialAgent(a)
 	if err == nil {
-		defer conn.Close()
+		defer tidy.CloseWarn("connection to the agent", conn)
 		callCtx, cancel := context.WithTimeout(ctx, c.timeout())
 		defer cancel()
 		var resp *agentpb.PingResponse

@@ -26,6 +26,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/health"
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 	"github.com/voidgrid/voidgrid-backup/internal/virt"
 )
@@ -57,7 +58,10 @@ func main() {
 	if healthcheck {
 		args = args[1:]
 	}
-	flag.CommandLine.Parse(args)
+	if err := flag.CommandLine.Parse(args); err != nil {
+		fmt.Fprintln(os.Stderr, err) // flag.ExitOnError has exited already; this keeps the check explicit
+		os.Exit(2)
+	}
 	c := config{listen: *listen, healthListen: *healthListen, data: *data, server: *serverAddr, token: *token,
 		dockerSocket: *dockerSocket, libvirtSocket: *libvirtSocket, libvirtURI: *libvirtURI,
 		cacheDir: *cacheDir, cacheMetadataMB: *cacheMetadataMB, cacheContentMB: *cacheContentMB}
@@ -140,7 +144,7 @@ func run(c config) error {
 				slog.Error("health endpoint", "addr", c.healthListen, "err", err)
 			}
 		}()
-		defer hs.Close()
+		defer tidy.CloseWarn("health endpoint", hs)
 	}
 
 	go func() {

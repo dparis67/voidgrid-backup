@@ -62,7 +62,7 @@ func (e *Engine) BackupVM(ctx context.Context, r Repo, hv virt.Hypervisor, spec 
 	if err != nil {
 		return PathResult{}, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	opened := time.Since(t0)
 	res := e.backupVM(ctx, rep, hv, spec, keep)
 	res.Timings.Open = opened
@@ -236,7 +236,7 @@ func (e *Engine) RestoreVM(ctx context.Context, r Repo, hv virt.Hypervisor, snap
 	if err != nil {
 		return RestoreStats{}, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	root, err := e.snapshotEntry(ctx, rep, snapshotID, "")
 	if err != nil {
 		return RestoreStats{}, err

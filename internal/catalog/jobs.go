@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 type Repository struct {
@@ -140,7 +141,7 @@ func (c *Catalog) ListRepositories(ctx context.Context) ([]Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Repository
 	for rows.Next() {
 		r, err := scanRepository(rows)
@@ -263,7 +264,7 @@ func (c *Catalog) ListJobs(ctx context.Context) ([]Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Job
 	for rows.Next() {
 		j, err := scanJob(rows)
@@ -355,7 +356,7 @@ func (c *Catalog) ListRuns(ctx context.Context, jobID string, limit int) ([]Run,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Run
 	for rows.Next() {
 		r, err := scanRun(rows)

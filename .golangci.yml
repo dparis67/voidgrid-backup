@@ -19,26 +19,13 @@ linters:
   settings:
     errcheck:
       verbose: true
-      # Cleanup calls whose error can't lose data: closing read handles,
-      # connections and transactions that already failed. File Close, Remove
-      # and writes are NOT listed, so an unchecked close on a write path is
-      # still caught.
-      exclude-functions:
-        - (*database/sql.DB).Close
-        - (*database/sql.Rows).Close
-        - (*database/sql.Tx).Rollback
-        - (*flag.FlagSet).Parse # ExitOnError: exits on its own
-        - (*github.com/digitalocean/go-libvirt.Libvirt).Disconnect
-        - (*github.com/voidgrid/voidgrid-backup/internal/catalog.Catalog).Close
-        - (github.com/kopia/kopia/repo.Repository).Close # writes are flushed by repo.WriteSession, which is checked
-        - (github.com/kopia/kopia/repo/blob.Storage).Close
-        - (*google.golang.org/grpc.ClientConn).Close
-        - (net.Conn).Close
-        - (*net/http.Server).Close
-        - (*net/smtp.Client).Close
+      # No function is excused. A close that can fail is either handled or goes
+      # through internal/tidy, which logs the failure: at warning level for a
+      # database, connection, repository, storage or session, at debug level only
+      # for a temporary file or a read handle whose result nobody can use.
     gosec:
       excludes:
-        - G104 # unhandled errors: errcheck covers these, with its curated exclusions above
+        - G104 # unhandled errors: errcheck covers these, and excuses no function
         - G115 # integer conversions: uid/size/count values far inside the target range
         - G118 # jobs started from a request run on a background context on purpose: they outlive the request
         - G304 # a backup tool reads paths from its configuration and data directory by design

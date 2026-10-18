@@ -49,7 +49,7 @@ func (e *Engine) Check(ctx context.Context, r Repo, opt CheckOptions) (CheckResu
 	if err != nil {
 		return res, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	ids, err := snapshot.ListSnapshotManifests(ctx, rep, nil, nil)
 	if err != nil {
@@ -217,7 +217,7 @@ func (e *Engine) ListAllSnapshots(ctx context.Context, r Repo) ([]HostSnapshot, 
 	if err != nil {
 		return nil, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	ids, err := snapshot.ListSnapshotManifests(ctx, rep, nil, nil)
 	if err != nil {
 		return nil, err

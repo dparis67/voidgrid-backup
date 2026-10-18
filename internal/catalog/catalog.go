@@ -16,6 +16,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 //go:embed migrations/*.sql
@@ -50,13 +52,13 @@ func Open(path string) (*Catalog, error) {
 	db.SetMaxOpenConns(1)
 	c := &Catalog{db: db}
 	if err := c.migrate(); err != nil {
-		db.Close()
+		tidy.CloseWarn("database", db)
 		return nil, fmt.Errorf("migrate %s: %w", path, err)
 	}
 	// The catalog holds repository passwords. SQLite gives its -wal/-shm
 	// files the database file's mode, so this covers them too.
 	if err := os.Chmod(path, 0o600); err != nil {
-		db.Close()
+		tidy.CloseWarn("database", db)
 		return nil, err
 	}
 	return c, nil
@@ -102,12 +104,12 @@ func (c *Catalog) migrate() error {
 			return err
 		}
 		if _, err := tx.Exec(string(stmt)); err != nil {
-			tx.Rollback()
+			tidy.Rollback(tx)
 			return fmt.Errorf("migration %s: %w", e.Name(), err)
 		}
 		if _, err := tx.Exec(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
 			v, formatTime(time.Now())); err != nil {
-			tx.Rollback()
+			tidy.Rollback(tx)
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -140,7 +142,7 @@ func (c *Catalog) ListAgents(ctx context.Context) ([]Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Agent
 	for rows.Next() {
 		a, err := scanAgent(rows)

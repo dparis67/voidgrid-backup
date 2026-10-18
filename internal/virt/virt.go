@@ -13,6 +13,8 @@ import (
 
 	"github.com/digitalocean/go-libvirt"
 	"github.com/digitalocean/go-libvirt/socket/dialers"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 var ErrNoDomain = errors.New("no such domain")
@@ -169,7 +171,7 @@ func (v *Libvirt) with(fn func(*libvirt.Libvirt) error) error {
 	if err != nil {
 		return err
 	}
-	defer l.Disconnect()
+	defer func() { tidy.Check("disconnect from libvirt", l.Disconnect()) }()
 	return fn(l)
 }
 

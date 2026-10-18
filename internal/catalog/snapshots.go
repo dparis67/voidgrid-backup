@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Snapshot is one snapshot of a job's source, as the UI shows it.
@@ -29,7 +31,7 @@ func (c *Catalog) UpsertSnapshots(ctx context.Context, jobID string, snaps []Sna
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tidy.Rollback(tx)
 	for _, s := range snaps {
 		if _, err := tx.ExecContext(ctx, upsertSnapshot, jobID, s.ID, s.Path, formatTime(s.Start), formatTime(s.End),
 			s.Bytes, s.Files, s.Errors, s.Incomplete); err != nil {
@@ -51,7 +53,7 @@ func (c *Catalog) ReplaceSnapshots(ctx context.Context, jobID string, snaps []Sn
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tidy.Rollback(tx)
 	if _, err := tx.ExecContext(ctx, `DELETE FROM snapshots WHERE job_id = ?`, jobID); err != nil {
 		return err
 	}
@@ -71,7 +73,7 @@ func (c *Catalog) ListSnapshots(ctx context.Context, jobID string) ([]Snapshot, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Snapshot
 	for rows.Next() {
 		var s Snapshot

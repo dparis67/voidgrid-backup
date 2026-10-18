@@ -79,7 +79,7 @@ func (e *Engine) BackupStack(ctx context.Context, r Repo, dk *docker.Client, spe
 	if err != nil {
 		return PathResult{}, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 	opened := time.Since(t0)
 	res := e.backupStack(ctx, rep, dk, spec, keep)
 	res.Timings.Open = opened
@@ -281,7 +281,7 @@ func (e *Engine) RestoreStack(ctx context.Context, r Repo, dk *docker.Client, sn
 	if err != nil {
 		return RestoreStats{}, err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	root, err := e.snapshotEntry(ctx, rep, snapshotID, "")
 	if err != nil {
@@ -366,7 +366,7 @@ func (e *Engine) ImportDump(ctx context.Context, r Repo, dk *docker.Client, snap
 	if err != nil {
 		return "", err
 	}
-	defer rep.Close(ctx)
+	defer tidy.CloseCtx(ctx, "repository", rep)
 
 	root, err := e.snapshotEntry(ctx, rep, snapshotID, "")
 	if err != nil {

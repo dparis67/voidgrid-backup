@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Registration states. An agent that presented a valid token stays pending
@@ -66,7 +68,7 @@ func (c *Catalog) ListRegistrations(ctx context.Context) ([]Registration, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []Registration
 	for rows.Next() {
 		r, err := scanRegistration(rows)
@@ -123,7 +125,7 @@ func (c *Catalog) DeleteAgent(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tidy.Rollback(tx)
 	if _, err := tx.ExecContext(ctx, `DELETE FROM registrations WHERE agent_id = ?`, id); err != nil {
 		return err
 	}

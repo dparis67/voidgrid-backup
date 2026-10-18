@@ -226,10 +226,17 @@ func sendEmail(c *EmailConfig, cfg Config, ev Event) error {
 	}
 	client, err := smtp.NewClient(conn, c.Host)
 	if err != nil {
-		conn.Close()
+		tidy.CloseWarn("smtp connection", conn)
 		return fmt.Errorf("smtp handshake: %w", err)
 	}
-	defer client.Close()
+	// A successful Quit closes the connection itself, so Close is only for the
+	// paths that do not get that far; closing after Quit would always fail.
+	quit := false
+	defer func() {
+		if !quit {
+			tidy.CloseWarn("smtp connection", client)
+		}
+	}()
 
 	if !c.ImplicitTLS {
 		if ok, _ := client.Extension("STARTTLS"); ok {
@@ -266,5 +273,9 @@ func sendEmail(c *EmailConfig, cfg Config, ev Event) error {
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("close body: %w", err)
 	}
-	return client.Quit()
+	if err := client.Quit(); err != nil {
+		return fmt.Errorf("quit: %w", err)
+	}
+	quit = true
+	return nil
 }

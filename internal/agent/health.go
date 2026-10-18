@@ -48,7 +48,7 @@ func (a *Agent) Health(ctx context.Context, grpcAddr string) HealthStatus {
 	if conn, err := d.DialContext(ctx, "tcp", loopback(grpcAddr)); err != nil {
 		st.GRPC = err.Error()
 	} else {
-		conn.Close()
+		tidy.CloseWarn("health check connection", conn)
 	}
 	if f, err := os.CreateTemp(a.dir, ".health-*"); err != nil {
 		st.DataDir = err.Error()

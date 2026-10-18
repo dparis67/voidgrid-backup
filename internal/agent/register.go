@@ -18,6 +18,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 )
 
@@ -128,7 +129,7 @@ func (a *Agent) registerOnce(ctx context.Context, cfg RegisterConfig, tok enroll
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer tidy.CloseWarn("registration connection", conn)
 	client := agentpb.NewRegistryClient(conn)
 
 	call := func() (context.Context, context.CancelFunc) { return context.WithTimeout(ctx, 15*time.Second) }

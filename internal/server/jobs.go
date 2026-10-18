@@ -20,6 +20,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/notify"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // Operation limits. Backups and restores are detached from the HTTP request
@@ -691,7 +692,7 @@ func withAgent[T any](c *Controller, a catalog.Agent, timeout time.Duration, cal
 	if err != nil {
 		return zero, err
 	}
-	defer conn.Close()
+	defer tidy.CloseWarn("connection to the agent", conn)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return call(ctx, agentpb.NewAgentClient(conn))

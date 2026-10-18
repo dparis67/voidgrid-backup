@@ -10,6 +10,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 var errGotKey = errors.New("host key captured")
@@ -23,7 +25,7 @@ func FetchHostKey(ctx context.Context, host string, port int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fetch host key: %w", err)
 	}
-	defer conn.Close()
+	defer tidy.CloseWarn("host key connection", conn)
 	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
 		return "", fmt.Errorf("fetch host key: %w", err)
 	}

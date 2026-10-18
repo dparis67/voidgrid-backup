@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
@@ -143,7 +144,11 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 	if err != nil {
 		return nil, err
 	}
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	// Three things end this connection: the context being cancelled, the stream
+	// ending, and the caller closing the reader early. One idempotent close, so
+	// none of them closes it twice and a close that fails is reported once.
+	closeConn := sync.OnceFunc(func() { tidy.CloseWarn("docker exec connection", conn) })
+	stop := context.AfterFunc(ctx, closeConn)
 
 	if stdin != nil {
 		go func() {
@@ -161,7 +166,7 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 	pr, pw := io.Pipe()
 	go func() {
 		defer stop()
-		defer conn.Close()
+		defer closeConn()
 		var stderr tailBuffer
 		err := demux(br, pw, &stderr)
 		if err == nil {
@@ -169,7 +174,7 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd, env []string
 		}
 		pw.CloseWithError(err) // nil closes with io.EOF
 	}()
-	return &execReader{PipeReader: pr, conn: conn}, nil
+	return &execReader{PipeReader: pr, closeConn: closeConn}, nil
 }
 
 func (c *Client) execResult(ctx context.Context, execID string, cmd []string, stderr *tailBuffer) error {
@@ -195,11 +200,11 @@ func (c *Client) execResult(ctx context.Context, execID string, cmd []string, st
 
 type execReader struct {
 	*io.PipeReader
-	conn net.Conn
+	closeConn func() // closes the exec's connection, once
 }
 
 func (r *execReader) Close() error {
-	r.conn.Close()
+	r.closeConn()
 	return r.PipeReader.Close()
 }
 
@@ -216,18 +221,18 @@ func (c *Client) hijack(ctx context.Context, path string, body any) (net.Conn, *
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "tcp")
 	if err := req.Write(conn); err != nil {
-		conn.Close()
+		tidy.CloseWarn("docker connection", conn)
 		return nil, nil, err
 	}
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, req)
 	if err != nil {
-		conn.Close()
+		tidy.CloseWarn("docker connection", conn)
 		return nil, nil, fmt.Errorf("docker POST %s: %w", path, err)
 	}
 	if resp.StatusCode != http.StatusSwitchingProtocols && resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		conn.Close()
+		tidy.CloseWarn("docker connection", conn)
 		return nil, nil, fmt.Errorf("docker POST %s: %s: %s", path, resp.Status, strings.TrimSpace(string(msg)))
 	}
 	return conn, br, nil

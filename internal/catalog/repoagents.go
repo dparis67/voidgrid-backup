@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // AssignAgent records that an agent may use a repository. It is idempotent. An
@@ -21,7 +23,7 @@ func (c *Catalog) SetDefaultRepository(ctx context.Context, agentID, repoID stri
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tidy.Rollback(tx)
 	res, err := tx.ExecContext(ctx, `UPDATE repository_agents SET is_default = (repository_id = ?) WHERE agent_id = ?
 		AND EXISTS (SELECT 1 FROM repository_agents WHERE agent_id = ? AND repository_id = ?)`, repoID, agentID, agentID, repoID)
 	if err != nil {
@@ -39,7 +41,7 @@ func (c *Catalog) DefaultRepositories(ctx context.Context) (map[string]string, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	out := map[string]string{}
 	for rows.Next() {
 		var a, r string
@@ -64,7 +66,7 @@ func (c *Catalog) RepositoryAgents(ctx context.Context, repoID string) ([]string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer tidy.CloseWarn("rows", rows)
 	var out []string
 	for rows.Next() {
 		var id string

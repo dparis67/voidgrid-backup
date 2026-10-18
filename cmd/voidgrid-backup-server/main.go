@@ -27,6 +27,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/server"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 	"github.com/voidgrid/voidgrid-backup/internal/webauth"
 )
@@ -51,7 +52,10 @@ func main() {
 	if healthcheck || printToken {
 		args = args[1:]
 	}
-	flag.CommandLine.Parse(args)
+	if err := flag.CommandLine.Parse(args); err != nil {
+		fmt.Fprintln(os.Stderr, err) // flag.ExitOnError has exited already; this keeps the check explicit
+		os.Exit(2)
+	}
 	if printToken {
 		tok, err := readToken(*data)
 		if err != nil {
@@ -102,7 +106,7 @@ func readToken(data string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer cat.Close()
+	defer tidy.CloseWarn("catalog", cat)
 	hexSecret, err := cat.GetSetting(context.Background(), "registration_secret")
 	if err != nil {
 		return "", err
@@ -126,7 +130,7 @@ func run(listen, agentListen, data string, poll time.Duration, oidcCfg webauth.C
 	if err != nil {
 		return err
 	}
-	defer cat.Close()
+	defer tidy.CloseWarn("catalog", cat)
 	pkiDir := filepath.Join(data, "pki")
 	ca, err := pki.LoadOrCreateCA(pkiDir)
 	if err != nil {

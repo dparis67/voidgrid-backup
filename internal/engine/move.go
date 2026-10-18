@@ -220,7 +220,7 @@ func requireRepositoryAt(ctx context.Context, c repocfg.Config) error {
 	if err != nil {
 		return fmt.Errorf("open the current location: %w", err)
 	}
-	defer st.Close(ctx)
+	defer tidy.CloseCtx(ctx, "storage", st)
 	if _, err := st.GetMetadata(ctx, format.KopiaRepositoryBlobID); errors.Is(err, blob.ErrBlobNotFound) {
 		return errors.New("no repository was found at the current location; nothing was moved")
 	} else if err != nil {
@@ -345,7 +345,7 @@ func dialSFTP(ctx context.Context, s repocfg.SFTP) (*pkgsftp.Client, func(), err
 		User: s.User, Auth: auth, HostKeyCallback: hostKey, Timeout: 30 * time.Second,
 	})
 	if err != nil {
-		conn.Close()
+		tidy.CloseWarn("connection to "+addr, conn)
 		return nil, nil, fmt.Errorf("ssh to %s: %w", addr, err)
 	}
 	cli, err := pkgsftp.NewClient(ssh.NewClient(sc, chans, reqs))
