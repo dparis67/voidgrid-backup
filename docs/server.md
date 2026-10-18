@@ -223,6 +223,33 @@ and snapshots, which is how a wiped or redeployed host comes back. Reject
 refuses an agent; Forget removes a rejected entry so it can register again.
 Agents can be renamed at any time: the name is only a label.
 
+#### What Replaces does
+
+Replacing signs the new host's key with the **old agent's ID** and points that
+agent at the new address, hostname and certificate. The name, jobs, schedules,
+repository assignments, the per-agent SFTP key paths, the default repository
+and maintenance ownership all stay, because they hang off the agent ID.
+
+- **Why it matters.** Kopia identifies a source by host (the agent ID), user
+  and path. A rebuilt host that replaces its agent keeps that ID, so its next
+  backup finds the previous snapshot and is incremental, retention keeps
+  pruning the same source, and the repository's maintenance owner still
+  matches. Approved as a new agent instead, the host gets a new ID: its first
+  backup scans everything again (the data still dedupes), the old snapshots
+  belong to another host and are never pruned, and maintenance owned by the old
+  agent stalls until you hand it over under **Maintainer...**.
+- **What it does not carry.** The Kopia cache (it starts cold on the new host),
+  mounts, and anything the jobs name: the key file path in the new container,
+  the Docker projects and the libvirt domains must exist there.
+- **Do not replace the wrong agent.** The old host loses trust at once, and
+  its jobs now run on the new machine: if that is a different machine they
+  fail, or back up other content under the old source identity.
+- **The preselect.** When a waiting registration reports the same hostname
+  (ignoring case) as exactly one approved agent, the form preselects that agent
+  and says so, and warns if that agent was reached in the last few minutes. It
+  is only a suggestion and nothing is approved for you: choose **(new agent)**
+  if it is a different machine.
+
 The **Registration token** is shown on the same page. It is one reusable
 secret for all new agents, rotatable with a button; rotating makes the old
 token stop working and drops agents that are still waiting, but agents that

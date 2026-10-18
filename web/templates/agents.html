@@ -51,12 +51,15 @@
     <form class="grid" method="post" action="/agents/registrations/{{.ID}}/approve">
       <label>Name <input name="name" value="{{.Hostname}}"></label>
       <label>Address <input name="address" class="mono" value="{{.Address}}" required></label>
+      {{$match := index $.Replaces .ID}}
       <label>Replaces
         <select name="replace">
           <option value="">(new agent)</option>
-          {{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+          {{range $.Agents}}<option value="{{.ID}}" {{if and $match (eq $match.Agent.ID .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
         </select>
       </label>
+      {{with $match}}<p class="hint wide"><strong>Same hostname as {{.Agent.Name}}.</strong> If this host is a rebuild of it, approve as its replacement: it keeps that agent's jobs, repositories, maintenance and snapshot history. If it is a different machine, choose (new agent): a replacement hands over every job of {{.Agent.Name}}.
+        {{if .Live}}<span class="warn">{{.Agent.Name}} was reached {{ago .Agent.LastSeen}}: replacing it disconnects it at once.</span>{{end}}</p>{{end}}
       <div class="actions"><button type="submit">Approve</button></div>
     </form>
     <form method="post" action="/agents/registrations/{{.ID}}/reject"><div class="actions"><button type="submit">Reject</button></div></form>

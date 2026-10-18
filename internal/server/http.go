@@ -223,6 +223,9 @@ type agentsPage struct {
 	Agents  []catalog.Agent
 	Pending []catalog.Registration
 	Token   string
+	// Replaces maps a pending registration's ID to the agent it looks like a
+	// rebuild of (same hostname), for the approve form to preselect.
+	Replaces map[string]*replaceCandidate
 }
 
 func (u *ui) agents(w http.ResponseWriter, r *http.Request) {
@@ -243,6 +246,13 @@ func (u *ui) renderAgents(w http.ResponseWriter, r *http.Request, code int, p ag
 		return
 	}
 	p.Agents = agents
+	p.Replaces = map[string]*replaceCandidate{}
+	now := time.Now()
+	for _, reg := range p.Pending {
+		if reg.Status == catalog.RegPending {
+			p.Replaces[reg.ID] = replaceFor(reg, agents, now)
+		}
+	}
 	u.render(w, code, "agents", p)
 }
 
