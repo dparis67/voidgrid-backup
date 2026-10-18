@@ -14,6 +14,9 @@
       <form class="grid" method="post" action="/jobs/{{$job.ID}}/delete">
         <label>Type <span class="mono">{{$job.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
         <label class="check wide"><input type="checkbox" name="snapshots" value="1"> Also delete its snapshots ({{len .Snapshots}} listed). This can't be undone: the data is released by the next maintenance cycle.</label>
+        {{if and .AgentDown .ServerOK}}<label class="wide">Delete the snapshots through
+          <select name="on"><option value="">{{$job.Agent}} (unreachable now)</option><option value="server">the server</option></select>
+          <span class="hint">The agent cannot be reached, but the server can open the repository. It deletes only this job's snapshots, and only when you choose it.</span></label>{{end}}
         <div class="actions"><button class="danger" type="submit">Delete job and its run history</button>
           <span class="hint">Unchecked, the snapshots stay in the repository.</span></div>
       </form>

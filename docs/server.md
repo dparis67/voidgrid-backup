@@ -445,8 +445,11 @@ assigned to it, and the server, to open it and says which can.
 - **Deletes are explicit.** Deleting a snapshot and wiping a repository never
   fall back. A snapshot's delete form offers **through the server** only when
   the job's agent is unreachable and the server can open the repository. The
-  wipe form always lists **the server** next to the agents when it can. The
-  server only deletes snapshots that belong to the job's agent.
+  wipe form always lists **the server** next to the agents when it can. A job's
+  Delete form, when **Also delete its snapshots** is ticked and the job's agent
+  is unreachable, offers **Delete the snapshots through: the server**; deleting
+  the job alone needs no agent at all. The server only deletes snapshots that
+  belong to the job's agent.
 - The server then needs the storage credentials and the repository password
   (it already holds the passwords). A compromised server exposes that storage,
   as it already does through the passwords and configs.
@@ -466,8 +469,6 @@ assigned to it, and the server, to open it and says which can.
   at the new place, or the data is moved back. It is never chosen for you. A
   filesystem repository is moved through an agent, because the server only sees
   it through a mapped path that the edit does not change.
-- Not covered: deleting a job together with its snapshots when its agent is
-  down (delete the snapshots one by one through the server first).
 
 #### Maintenance
 

@@ -897,7 +897,7 @@ func (u *ui) deleteJob(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/jobs/"+id, "Type the job name to confirm deletion.")
 		return
 	}
-	n, err := u.c.DeleteJob(r.Context(), id, r.FormValue("snapshots") == "1")
+	n, err := u.c.DeleteJobOn(r.Context(), id, r.FormValue("snapshots") == "1", r.FormValue("on"))
 	switch {
 	case errors.Is(err, ErrRunning):
 		redirectNotice(w, r, "/jobs/"+id, "Wait for the running backup to finish before deleting.")

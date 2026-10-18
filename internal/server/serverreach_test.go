@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -197,5 +198,46 @@ func TestCheckAccessAndThePagesOfferTheServer(t *testing.T) {
 	page := get(t, client, srv.URL+"/repositories", "Wipe all its data")
 	if !strings.Contains(page, `<option value="server">the server</option>`) {
 		t.Fatalf("the wipe form does not offer the server:\n%s", page)
+	}
+}
+
+func TestDeleteAJobWithItsSnapshotsWhenItsAgentIsDown(t *testing.T) {
+	ctx := context.Background()
+	c, job, repo, _ := serverOnlyRepo(t)
+
+	// Deleting the job alone needs no agent at all, so it is not tested here;
+	// with the snapshots it needs somewhere that can open the repository.
+	if _, err := c.DeleteJobOn(ctx, job.ID, true, ""); err == nil {
+		t.Fatal("the job and its snapshots were deleted through an agent that cannot open the repository")
+	}
+	if _, err := c.DeleteJobOn(ctx, job.ID, true, "bogus"); err == nil {
+		t.Fatal("an unknown place to delete from was accepted")
+	}
+	if _, err := c.Catalog.Job(ctx, job.ID); err != nil {
+		t.Fatalf("a refused delete removed the job: %v", err)
+	}
+	if snaps, _ := c.Snapshots(ctx, job.ID); len(snaps) != 1 {
+		t.Fatalf("a refused delete changed the snapshot record: %d", len(snaps))
+	}
+
+	srv := httptest.NewServer(NewHandler(c))
+	defer srv.Close()
+	client := authedClient(t, c, srv)
+	if err := c.Catalog.RecordFailure(ctx, job.AgentID, "connection refused"); err != nil {
+		t.Fatal(err)
+	}
+	page := get(t, client, srv.URL+"/jobs/"+job.ID, "Delete the snapshots through")
+	if !strings.Contains(page, `<option value="server">the server</option>`) {
+		t.Fatalf("the job's delete form does not offer the server while its agent is down:\n%s", page)
+	}
+
+	// Through the form, naming the server.
+	post(t, client, srv.URL+"/jobs/"+job.ID+"/delete", url.Values{"confirm": {job.Name}, "snapshots": {"1"}, "on": {"server"}})
+	if _, err := c.Catalog.Job(ctx, job.ID); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("the job is still there: %v", err)
+	}
+	er, _ := serverRepo(repo)
+	if left, err := c.Engine.ListSnapshotsOf(ctx, er, job.AgentID, nil); err != nil || len(left) != 0 {
+		t.Fatalf("the snapshots are still in the repository: %d %v", len(left), err)
 	}
 }

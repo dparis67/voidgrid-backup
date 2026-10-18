@@ -25,6 +25,13 @@ func (e *Engine) DeleteSnapshot(ctx context.Context, r Repo, snapshotID string) 
 	return e.deleteSnapshots(ctx, r, []string{snapshotID}, false, e.hostname)
 }
 
+// DeleteSnapshotsOf forgets several snapshots that host made in one repository
+// session, skipping any already gone. If any of them belongs to another host
+// none is deleted.
+func (e *Engine) DeleteSnapshotsOf(ctx context.Context, r Repo, host string, snapshotIDs []string) error {
+	return e.deleteSnapshots(ctx, r, snapshotIDs, true, host)
+}
+
 // DeleteSnapshotOf forgets one snapshot that host made, which is how the server
 // deletes an agent's snapshot through its own engine when the agent cannot
 // reach the repository. A snapshot of any other host is refused.

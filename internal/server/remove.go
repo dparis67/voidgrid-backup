@@ -147,6 +147,15 @@ func (c *Controller) WipeError(ctx context.Context, repoID string) string {
 // hasn't picked up yet (the list is refreshed after every backup) is left in
 // the repository.
 func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool) (int, error) {
+	return c.DeleteJobOn(ctx, jobID, snapshots, "")
+}
+
+// DeleteJobOn is DeleteJob with the snapshots forgotten through on: "" for the
+// job's agent, or ServerHost for the server's own engine, for when that agent
+// cannot reach the repository and the server can. It never falls back by
+// itself; on only matters when the snapshots are being deleted, since deleting
+// the job alone needs no agent.
+func (c *Controller) DeleteJobOn(ctx context.Context, jobID string, snapshots bool, on string) (int, error) {
 	if !c.inflight.start(jobID) {
 		return 0, ErrRunning
 	}
@@ -157,6 +166,16 @@ func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool
 		if err != nil {
 			return 0, err
 		}
+		switch on {
+		case "":
+		case ServerHost:
+			if err := c.ServerCanOpen(repo); err != nil {
+				return 0, fmt.Errorf("the server cannot open this repository: %w", err)
+			}
+			agent = serverAsAgent
+		default:
+			return 0, fmt.Errorf("unknown place to delete from: %q", on)
+		}
 		snaps, err := c.Catalog.ListSnapshots(ctx, jobID)
 		if err != nil {
 			return 0, err
@@ -166,13 +185,16 @@ func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool
 			ids = append(ids, s.ID)
 		}
 		if len(ids) > 0 {
-			if _, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
+			if _, err := runOn(c, agent, repo, browseTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.DeleteSnapshotResponse, error) {
+				// The snapshots are the job's agent's: the server acts for that host only.
+				return &agentpb.DeleteSnapshotResponse{}, c.Engine.DeleteSnapshotsOf(ctx, er, job.AgentID, ids)
+			}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
 				return cl.DeleteSnapshot(ctx, &agentpb.DeleteSnapshotRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotIds: ids})
 			}); err != nil {
 				return 0, fmt.Errorf("delete snapshots on %s: %w", agent.Name, err)
 			}
 			n = len(ids)
-			slog.Warn("job snapshots deleted", "job", job.Name, "repo", repo.ID, "snapshots", n)
+			slog.Warn("job snapshots deleted", "job", job.Name, "repo", repo.ID, "snapshots", n, "on", agent.Name)
 		}
 	}
 	return n, c.Catalog.DeleteJob(ctx, jobID)

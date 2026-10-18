@@ -214,8 +214,11 @@ func TestListAndDeleteSnapshotsOfAnotherHost(t *testing.T) {
 	if err := other.DeleteSnapshot(ctx, r, sid); err == nil {
 		t.Fatal("host-b deleted host-a's snapshot as itself")
 	}
-	if err := other.DeleteSnapshotOf(ctx, r, "host-a", sid); err != nil {
-		t.Fatalf("deleting as host-a: %v", err)
+	if err := other.DeleteSnapshotsOf(ctx, r, "host-c", []string{sid}); err == nil {
+		t.Fatal("a batch delete as the wrong host was accepted")
+	}
+	if err := other.DeleteSnapshotsOf(ctx, r, "host-a", []string{sid, "gone-already"}); err != nil {
+		t.Fatalf("batch delete as host-a (one already gone): %v", err)
 	}
 	if left, _ := e.ListSnapshots(ctx, r, []string{src}); len(left) != 0 {
 		t.Fatalf("the snapshot is still there: %d", len(left))
