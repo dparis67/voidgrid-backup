@@ -2,7 +2,7 @@
   {{$job := .Job}}
   <div class="row" id="job-head">
     <h2 style="margin:0">{{$job.Name}}</h2>
-    {{if $job.Running}}<span class="running">running</span>{{end}}
+    {{if $job.Running}}<span class="running">running</span>{{with $job.Progress}}<span class="muted prog" title="{{.Dir}}">{{.Text}}</span>{{end}}{{end}}
     <form method="post" action="/jobs/{{$job.ID}}/run" class="row" style="flex-wrap:nowrap;gap:10px"><button type="submit" {{if $job.Running}}disabled{{end}}>Back up now</button>
       <label class="check" style="white-space:nowrap" title="After the backup, run a full maintenance cycle on its repository even if none is due. It holds the agent until it finishes. Skipped if the backup fails."><input type="checkbox" name="maintain" value="1"> then run maintenance</label></form>
     <form method="post" action="/jobs/{{$job.ID}}/check"><button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Verify repository</button></form>

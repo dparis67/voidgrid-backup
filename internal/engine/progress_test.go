@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"strings"
 	"testing"
@@ -33,5 +34,25 @@ func TestLogProgressLogsUntilStopped(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	if len(buf.String()) != n {
 		t.Fatal("progress kept logging after stop")
+	}
+}
+
+func TestProgressIsReportedWhileAnUploadRunsAndNotAfter(t *testing.T) {
+	ctx := context.Background()
+	e, r, src, _ := removeFixture(t)
+	if _, ok := e.Progress(); ok {
+		t.Fatal("progress reported with nothing running")
+	}
+	var during UploadProgress
+	var running bool
+	e.uploadHook = func() { during, running = e.Progress() }
+	if res, err := e.Backup(ctx, r, []string{src}, nil, keepOne); err != nil || res[0].Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	if !running || during.Path != src || during.Started.IsZero() {
+		t.Fatalf("progress during the upload: running=%v %+v", running, during)
+	}
+	if _, ok := e.Progress(); ok {
+		t.Fatal("progress still reported after the upload ended")
 	}
 }

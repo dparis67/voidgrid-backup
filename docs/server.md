@@ -520,6 +520,12 @@ weekly/monthly/annual):
   [agent.md](agent.md#compose-stacks).
 - **VM job** (agent → VMs): one libvirt domain. See [agent.md](agent.md#virtual-machines).
 
+While a job runs, its row and its page show where the upload is, for example
+`running 34% · 23 GiB of 68 GiB · …/library/2024`; before Kopia has sized the
+source it shows `scanning, N files`. The figures come from the agent every few
+seconds and the pages refresh every three while anything runs. See
+[agent.md](agent.md#progress).
+
 A job page has "Back up now", "Verify repository", the schedule switch, a
 collapsed **Delete...** form, run history and the snapshot list (the Jobs list
 links each row to that form). Deleting a job removes it and its run history;

@@ -336,9 +336,12 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 		req.Paths = nil
 		req.Vm = &agentpb.VMSpec{Name: v.Name, Disks: v.Disks, Quiesce: v.Quiesce}
 	}
+	slog.Info("backup started", "job", job.Name, "trigger", trigger, "agent", agent.Name)
+	stopProgress := c.pollAgentProgress(jobID, agent)
 	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.BackupResponse, error) {
 		return cl.Backup(ctx, req)
 	})
+	stopProgress()
 	run.FinishedAt = time.Now()
 	if err != nil {
 		run.Status, run.Error = catalog.RunFailed, err.Error()
@@ -447,6 +450,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 	if run.ID, err = c.Catalog.StartRun(ctx, jobID, run.Kind, run.Trigger, run.StartedAt); err != nil {
 		return catalog.Run{}, err
 	}
+	slog.Info("check started", "job", jobID, "agent", agent.Name)
 	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
 		return cl.Check(ctx, &agentpb.CheckRequest{
 			Repository:          toProtoRepo(repo, agent.ID),

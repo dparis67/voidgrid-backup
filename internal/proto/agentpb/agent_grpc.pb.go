@@ -22,6 +22,7 @@ const (
 	Agent_Ping_FullMethodName            = "/voidgridbackup.agent.v1.Agent/Ping"
 	Agent_InitRepository_FullMethodName  = "/voidgridbackup.agent.v1.Agent/InitRepository"
 	Agent_Backup_FullMethodName          = "/voidgridbackup.agent.v1.Agent/Backup"
+	Agent_Progress_FullMethodName        = "/voidgridbackup.agent.v1.Agent/Progress"
 	Agent_ListSnapshots_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListSnapshots"
 	Agent_ListDirectory_FullMethodName   = "/voidgridbackup.agent.v1.Agent/ListDirectory"
 	Agent_Restore_FullMethodName         = "/voidgridbackup.agent.v1.Agent/Restore"
@@ -57,6 +58,9 @@ type AgentClient interface {
 	// password with every call; the agent keeps only a local Kopia cache.
 	InitRepository(ctx context.Context, in *InitRepositoryRequest, opts ...grpc.CallOption) (*InitRepositoryResponse, error)
 	Backup(ctx context.Context, in *BackupRequest, opts ...grpc.CallOption) (*BackupResponse, error)
+	// Progress reports the upload running now. It never waits for the agent's
+	// operation lock, so it answers while a backup holds it.
+	Progress(ctx context.Context, in *ProgressRequest, opts ...grpc.CallOption) (*ProgressResponse, error)
 	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	ListDirectory(ctx context.Context, in *ListDirectoryRequest, opts ...grpc.CallOption) (*ListDirectoryResponse, error)
 	Restore(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreResponse, error)
@@ -129,6 +133,16 @@ func (c *agentClient) Backup(ctx context.Context, in *BackupRequest, opts ...grp
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BackupResponse)
 	err := c.cc.Invoke(ctx, Agent_Backup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentClient) Progress(ctx context.Context, in *ProgressRequest, opts ...grpc.CallOption) (*ProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProgressResponse)
+	err := c.cc.Invoke(ctx, Agent_Progress_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +344,9 @@ type AgentServer interface {
 	// password with every call; the agent keeps only a local Kopia cache.
 	InitRepository(context.Context, *InitRepositoryRequest) (*InitRepositoryResponse, error)
 	Backup(context.Context, *BackupRequest) (*BackupResponse, error)
+	// Progress reports the upload running now. It never waits for the agent's
+	// operation lock, so it answers while a backup holds it.
+	Progress(context.Context, *ProgressRequest) (*ProgressResponse, error)
 	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
 	ListDirectory(context.Context, *ListDirectoryRequest) (*ListDirectoryResponse, error)
 	Restore(context.Context, *RestoreRequest) (*RestoreResponse, error)
@@ -386,6 +403,9 @@ func (UnimplementedAgentServer) InitRepository(context.Context, *InitRepositoryR
 }
 func (UnimplementedAgentServer) Backup(context.Context, *BackupRequest) (*BackupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Backup not implemented")
+}
+func (UnimplementedAgentServer) Progress(context.Context, *ProgressRequest) (*ProgressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Progress not implemented")
 }
 func (UnimplementedAgentServer) ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListSnapshots not implemented")
@@ -512,6 +532,24 @@ func _Agent_Backup_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServer).Backup(ctx, req.(*BackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Agent_Progress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).Progress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_Progress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).Progress(ctx, req.(*ProgressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -858,6 +896,10 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Backup",
 			Handler:    _Agent_Backup_Handler,
+		},
+		{
+			MethodName: "Progress",
+			Handler:    _Agent_Progress_Handler,
 		},
 		{
 			MethodName: "ListSnapshots",

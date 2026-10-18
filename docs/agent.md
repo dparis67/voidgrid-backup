@@ -62,8 +62,13 @@ stored there, so it is encrypted the same way, with integrity checks.
   when it is recreated; the log line `kopia cache` at startup shows where it is.
 - A changed setting takes effect the next time a repository is opened. The
   settings are local to this host: nothing is written to the repository.
-- The cache of a repository whose connection details changed is left behind in
-  its old directory; delete it.
+- When a repository's connection details change (its path moved with Edit, or
+  its credentials), the agent takes the cache of the old connection over to the
+  new one, but only if the old connection recorded the repository's Kopia ID
+  (written the first time a connection opens) and the new one is to the same
+  repository. Otherwise the old cache is left in its directory and the new
+  connection starts empty; delete the old one by hand. Wiping a repository
+  removes its cache on the agent that ran the wipe.
 
 ## Permissions
 
@@ -202,6 +207,17 @@ is logged on every retry.
 
 Absolute directories, with gitignore-style excludes (`*.tmp`, `/cache/`). The
 agent's own data directory is always excluded. One snapshot per path.
+
+## Progress
+
+While a backup uploads, the agent logs `backup progress` every 30 seconds: the
+source path, files seen (hashed and unchanged), bytes hashed, the directory it
+is in, and, once Kopia has sized the source, the estimated size and a
+percentage. The estimate only exists after the scan, so a first backup of a large
+tree shows no percentage for a while. The server polls the same figures (the
+`Progress` call, which does not wait for the agent's operation lock) while the job
+runs and shows them next to "running" on the Jobs page and the job page; an
+agent older than the server just shows "running".
 
 ## Compose stacks
 

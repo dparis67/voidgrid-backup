@@ -56,6 +56,7 @@ type Controller struct {
 	regMu sync.Mutex
 
 	inflight running
+	progress progressBook
 	usage    usageCache
 	browse   browseCache
 	gate     repoGate

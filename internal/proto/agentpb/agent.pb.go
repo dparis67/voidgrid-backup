@@ -3535,6 +3535,162 @@ func (x *MaintainResponse) GetQueuedMs() int64 {
 	return 0
 }
 
+type ProgressRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProgressRequest) Reset() {
+	*x = ProgressRequest{}
+	mi := &file_agent_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProgressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProgressRequest) ProtoMessage() {}
+
+func (x *ProgressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProgressRequest.ProtoReflect.Descriptor instead.
+func (*ProgressRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{55}
+}
+
+type ProgressResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// False when no upload is running (idle, or still queued behind another
+	// operation); the rest is then empty.
+	Running     bool   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
+	Path        string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	StartedUnix int64  `protobuf:"varint,3,opt,name=started_unix,json=startedUnix,proto3" json:"started_unix,omitempty"`
+	// Files hashed or taken unchanged from the previous snapshot so far.
+	Files       int64 `protobuf:"varint,4,opt,name=files,proto3" json:"files,omitempty"`
+	HashedFiles int64 `protobuf:"varint,5,opt,name=hashed_files,json=hashedFiles,proto3" json:"hashed_files,omitempty"`
+	CachedFiles int64 `protobuf:"varint,6,opt,name=cached_files,json=cachedFiles,proto3" json:"cached_files,omitempty"`
+	HashedBytes int64 `protobuf:"varint,7,opt,name=hashed_bytes,json=hashedBytes,proto3" json:"hashed_bytes,omitempty"`
+	CachedBytes int64 `protobuf:"varint,8,opt,name=cached_bytes,json=cachedBytes,proto3" json:"cached_bytes,omitempty"`
+	// The source's size as Kopia estimates it; 0 until the estimate is done.
+	EstimatedBytes int64  `protobuf:"varint,9,opt,name=estimated_bytes,json=estimatedBytes,proto3" json:"estimated_bytes,omitempty"`
+	Dir            string `protobuf:"bytes,10,opt,name=dir,proto3" json:"dir,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ProgressResponse) Reset() {
+	*x = ProgressResponse{}
+	mi := &file_agent_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProgressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProgressResponse) ProtoMessage() {}
+
+func (x *ProgressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProgressResponse.ProtoReflect.Descriptor instead.
+func (*ProgressResponse) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *ProgressResponse) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *ProgressResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ProgressResponse) GetStartedUnix() int64 {
+	if x != nil {
+		return x.StartedUnix
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetFiles() int64 {
+	if x != nil {
+		return x.Files
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetHashedFiles() int64 {
+	if x != nil {
+		return x.HashedFiles
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetCachedFiles() int64 {
+	if x != nil {
+		return x.CachedFiles
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetHashedBytes() int64 {
+	if x != nil {
+		return x.HashedBytes
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetCachedBytes() int64 {
+	if x != nil {
+		return x.CachedBytes
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetEstimatedBytes() int64 {
+	if x != nil {
+		return x.EstimatedBytes
+	}
+	return 0
+}
+
+func (x *ProgressResponse) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
 var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
@@ -3848,11 +4004,25 @@ const file_agent_proto_rawDesc = "" +
 	"\x10MaintainResponse\x12\x10\n" +
 	"\x03ran\x18\x01 \x01(\bR\x03ran\x12\x14\n" +
 	"\x05owner\x18\x02 \x01(\tR\x05owner\x12\x1b\n" +
-	"\tqueued_ms\x18\x03 \x01(\x03R\bqueuedMs2\xf6\x10\n" +
+	"\tqueued_ms\x18\x03 \x01(\x03R\bqueuedMs\"\x11\n" +
+	"\x0fProgressRequest\"\xc0\x02\n" +
+	"\x10ProgressResponse\x12\x18\n" +
+	"\arunning\x18\x01 \x01(\bR\arunning\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
+	"\fstarted_unix\x18\x03 \x01(\x03R\vstartedUnix\x12\x14\n" +
+	"\x05files\x18\x04 \x01(\x03R\x05files\x12!\n" +
+	"\fhashed_files\x18\x05 \x01(\x03R\vhashedFiles\x12!\n" +
+	"\fcached_files\x18\x06 \x01(\x03R\vcachedFiles\x12!\n" +
+	"\fhashed_bytes\x18\a \x01(\x03R\vhashedBytes\x12!\n" +
+	"\fcached_bytes\x18\b \x01(\x03R\vcachedBytes\x12'\n" +
+	"\x0festimated_bytes\x18\t \x01(\x03R\x0eestimatedBytes\x12\x10\n" +
+	"\x03dir\x18\n" +
+	" \x01(\tR\x03dir2\xd7\x11\n" +
 	"\x05Agent\x12S\n" +
 	"\x04Ping\x12$.voidgridbackup.agent.v1.PingRequest\x1a%.voidgridbackup.agent.v1.PingResponse\x12q\n" +
 	"\x0eInitRepository\x12..voidgridbackup.agent.v1.InitRepositoryRequest\x1a/.voidgridbackup.agent.v1.InitRepositoryResponse\x12Y\n" +
-	"\x06Backup\x12&.voidgridbackup.agent.v1.BackupRequest\x1a'.voidgridbackup.agent.v1.BackupResponse\x12n\n" +
+	"\x06Backup\x12&.voidgridbackup.agent.v1.BackupRequest\x1a'.voidgridbackup.agent.v1.BackupResponse\x12_\n" +
+	"\bProgress\x12(.voidgridbackup.agent.v1.ProgressRequest\x1a).voidgridbackup.agent.v1.ProgressResponse\x12n\n" +
 	"\rListSnapshots\x12-.voidgridbackup.agent.v1.ListSnapshotsRequest\x1a..voidgridbackup.agent.v1.ListSnapshotsResponse\x12n\n" +
 	"\rListDirectory\x12-.voidgridbackup.agent.v1.ListDirectoryRequest\x1a..voidgridbackup.agent.v1.ListDirectoryResponse\x12\\\n" +
 	"\aRestore\x12'.voidgridbackup.agent.v1.RestoreRequest\x1a(.voidgridbackup.agent.v1.RestoreResponse\x12e\n" +
@@ -3886,7 +4056,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 	return file_agent_proto_rawDescData
 }
 
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 58)
 var file_agent_proto_goTypes = []any{
 	(*Repository)(nil),              // 0: voidgridbackup.agent.v1.Repository
 	(*InitRepositoryRequest)(nil),   // 1: voidgridbackup.agent.v1.InitRepositoryRequest
@@ -3943,7 +4113,9 @@ var file_agent_proto_goTypes = []any{
 	(*MoveRepositoryResponse)(nil),  // 52: voidgridbackup.agent.v1.MoveRepositoryResponse
 	(*MaintainRequest)(nil),         // 53: voidgridbackup.agent.v1.MaintainRequest
 	(*MaintainResponse)(nil),        // 54: voidgridbackup.agent.v1.MaintainResponse
-	nil,                             // 55: voidgridbackup.agent.v1.StackSpec.DumpsEntry
+	(*ProgressRequest)(nil),         // 55: voidgridbackup.agent.v1.ProgressRequest
+	(*ProgressResponse)(nil),        // 56: voidgridbackup.agent.v1.ProgressResponse
+	nil,                             // 57: voidgridbackup.agent.v1.StackSpec.DumpsEntry
 }
 var file_agent_proto_depIdxs = []int32{
 	0,  // 0: voidgridbackup.agent.v1.InitRepositoryRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
@@ -3961,7 +4133,7 @@ var file_agent_proto_depIdxs = []int32{
 	19, // 12: voidgridbackup.agent.v1.Service.mounts:type_name -> voidgridbackup.agent.v1.Mount
 	20, // 13: voidgridbackup.agent.v1.Stack.services:type_name -> voidgridbackup.agent.v1.Service
 	21, // 14: voidgridbackup.agent.v1.ListStacksResponse.stacks:type_name -> voidgridbackup.agent.v1.Stack
-	55, // 15: voidgridbackup.agent.v1.StackSpec.dumps:type_name -> voidgridbackup.agent.v1.StackSpec.DumpsEntry
+	57, // 15: voidgridbackup.agent.v1.StackSpec.dumps:type_name -> voidgridbackup.agent.v1.StackSpec.DumpsEntry
 	0,  // 16: voidgridbackup.agent.v1.RestoreStackRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	0,  // 17: voidgridbackup.agent.v1.ImportDumpRequest.repository:type_name -> voidgridbackup.agent.v1.Repository
 	28, // 18: voidgridbackup.agent.v1.VM.disks:type_name -> voidgridbackup.agent.v1.VMDisk
@@ -3980,47 +4152,49 @@ var file_agent_proto_depIdxs = []int32{
 	16, // 31: voidgridbackup.agent.v1.Agent.Ping:input_type -> voidgridbackup.agent.v1.PingRequest
 	1,  // 32: voidgridbackup.agent.v1.Agent.InitRepository:input_type -> voidgridbackup.agent.v1.InitRepositoryRequest
 	4,  // 33: voidgridbackup.agent.v1.Agent.Backup:input_type -> voidgridbackup.agent.v1.BackupRequest
-	8,  // 34: voidgridbackup.agent.v1.Agent.ListSnapshots:input_type -> voidgridbackup.agent.v1.ListSnapshotsRequest
-	11, // 35: voidgridbackup.agent.v1.Agent.ListDirectory:input_type -> voidgridbackup.agent.v1.ListDirectoryRequest
-	14, // 36: voidgridbackup.agent.v1.Agent.Restore:input_type -> voidgridbackup.agent.v1.RestoreRequest
-	18, // 37: voidgridbackup.agent.v1.Agent.ListStacks:input_type -> voidgridbackup.agent.v1.ListStacksRequest
-	24, // 38: voidgridbackup.agent.v1.Agent.RestoreStack:input_type -> voidgridbackup.agent.v1.RestoreStackRequest
-	25, // 39: voidgridbackup.agent.v1.Agent.ImportDump:input_type -> voidgridbackup.agent.v1.ImportDumpRequest
-	27, // 40: voidgridbackup.agent.v1.Agent.ListVMs:input_type -> voidgridbackup.agent.v1.ListVMsRequest
-	32, // 41: voidgridbackup.agent.v1.Agent.RestoreVM:input_type -> voidgridbackup.agent.v1.RestoreVMRequest
-	33, // 42: voidgridbackup.agent.v1.Agent.Check:input_type -> voidgridbackup.agent.v1.CheckRequest
-	43, // 43: voidgridbackup.agent.v1.Agent.DeleteSnapshot:input_type -> voidgridbackup.agent.v1.DeleteSnapshotRequest
-	45, // 44: voidgridbackup.agent.v1.Agent.WipeRepository:input_type -> voidgridbackup.agent.v1.WipeRepositoryRequest
-	53, // 45: voidgridbackup.agent.v1.Agent.Maintain:input_type -> voidgridbackup.agent.v1.MaintainRequest
-	47, // 46: voidgridbackup.agent.v1.Agent.TestRepository:input_type -> voidgridbackup.agent.v1.TestRepositoryRequest
-	49, // 47: voidgridbackup.agent.v1.Agent.TakeMaintenance:input_type -> voidgridbackup.agent.v1.TakeMaintenanceRequest
-	51, // 48: voidgridbackup.agent.v1.Agent.MoveRepository:input_type -> voidgridbackup.agent.v1.MoveRepositoryRequest
-	35, // 49: voidgridbackup.agent.v1.Agent.PathUsage:input_type -> voidgridbackup.agent.v1.PathUsageRequest
-	38, // 50: voidgridbackup.agent.v1.Agent.RepoStats:input_type -> voidgridbackup.agent.v1.RepoStatsRequest
-	40, // 51: voidgridbackup.agent.v1.Agent.Logs:input_type -> voidgridbackup.agent.v1.LogsRequest
-	17, // 52: voidgridbackup.agent.v1.Agent.Ping:output_type -> voidgridbackup.agent.v1.PingResponse
-	2,  // 53: voidgridbackup.agent.v1.Agent.InitRepository:output_type -> voidgridbackup.agent.v1.InitRepositoryResponse
-	7,  // 54: voidgridbackup.agent.v1.Agent.Backup:output_type -> voidgridbackup.agent.v1.BackupResponse
-	10, // 55: voidgridbackup.agent.v1.Agent.ListSnapshots:output_type -> voidgridbackup.agent.v1.ListSnapshotsResponse
-	13, // 56: voidgridbackup.agent.v1.Agent.ListDirectory:output_type -> voidgridbackup.agent.v1.ListDirectoryResponse
-	15, // 57: voidgridbackup.agent.v1.Agent.Restore:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	22, // 58: voidgridbackup.agent.v1.Agent.ListStacks:output_type -> voidgridbackup.agent.v1.ListStacksResponse
-	15, // 59: voidgridbackup.agent.v1.Agent.RestoreStack:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	26, // 60: voidgridbackup.agent.v1.Agent.ImportDump:output_type -> voidgridbackup.agent.v1.ImportDumpResponse
-	30, // 61: voidgridbackup.agent.v1.Agent.ListVMs:output_type -> voidgridbackup.agent.v1.ListVMsResponse
-	15, // 62: voidgridbackup.agent.v1.Agent.RestoreVM:output_type -> voidgridbackup.agent.v1.RestoreResponse
-	34, // 63: voidgridbackup.agent.v1.Agent.Check:output_type -> voidgridbackup.agent.v1.CheckResponse
-	44, // 64: voidgridbackup.agent.v1.Agent.DeleteSnapshot:output_type -> voidgridbackup.agent.v1.DeleteSnapshotResponse
-	46, // 65: voidgridbackup.agent.v1.Agent.WipeRepository:output_type -> voidgridbackup.agent.v1.WipeRepositoryResponse
-	54, // 66: voidgridbackup.agent.v1.Agent.Maintain:output_type -> voidgridbackup.agent.v1.MaintainResponse
-	48, // 67: voidgridbackup.agent.v1.Agent.TestRepository:output_type -> voidgridbackup.agent.v1.TestRepositoryResponse
-	50, // 68: voidgridbackup.agent.v1.Agent.TakeMaintenance:output_type -> voidgridbackup.agent.v1.TakeMaintenanceResponse
-	52, // 69: voidgridbackup.agent.v1.Agent.MoveRepository:output_type -> voidgridbackup.agent.v1.MoveRepositoryResponse
-	37, // 70: voidgridbackup.agent.v1.Agent.PathUsage:output_type -> voidgridbackup.agent.v1.PathUsageResponse
-	39, // 71: voidgridbackup.agent.v1.Agent.RepoStats:output_type -> voidgridbackup.agent.v1.RepoStatsResponse
-	42, // 72: voidgridbackup.agent.v1.Agent.Logs:output_type -> voidgridbackup.agent.v1.LogsResponse
-	52, // [52:73] is the sub-list for method output_type
-	31, // [31:52] is the sub-list for method input_type
+	55, // 34: voidgridbackup.agent.v1.Agent.Progress:input_type -> voidgridbackup.agent.v1.ProgressRequest
+	8,  // 35: voidgridbackup.agent.v1.Agent.ListSnapshots:input_type -> voidgridbackup.agent.v1.ListSnapshotsRequest
+	11, // 36: voidgridbackup.agent.v1.Agent.ListDirectory:input_type -> voidgridbackup.agent.v1.ListDirectoryRequest
+	14, // 37: voidgridbackup.agent.v1.Agent.Restore:input_type -> voidgridbackup.agent.v1.RestoreRequest
+	18, // 38: voidgridbackup.agent.v1.Agent.ListStacks:input_type -> voidgridbackup.agent.v1.ListStacksRequest
+	24, // 39: voidgridbackup.agent.v1.Agent.RestoreStack:input_type -> voidgridbackup.agent.v1.RestoreStackRequest
+	25, // 40: voidgridbackup.agent.v1.Agent.ImportDump:input_type -> voidgridbackup.agent.v1.ImportDumpRequest
+	27, // 41: voidgridbackup.agent.v1.Agent.ListVMs:input_type -> voidgridbackup.agent.v1.ListVMsRequest
+	32, // 42: voidgridbackup.agent.v1.Agent.RestoreVM:input_type -> voidgridbackup.agent.v1.RestoreVMRequest
+	33, // 43: voidgridbackup.agent.v1.Agent.Check:input_type -> voidgridbackup.agent.v1.CheckRequest
+	43, // 44: voidgridbackup.agent.v1.Agent.DeleteSnapshot:input_type -> voidgridbackup.agent.v1.DeleteSnapshotRequest
+	45, // 45: voidgridbackup.agent.v1.Agent.WipeRepository:input_type -> voidgridbackup.agent.v1.WipeRepositoryRequest
+	53, // 46: voidgridbackup.agent.v1.Agent.Maintain:input_type -> voidgridbackup.agent.v1.MaintainRequest
+	47, // 47: voidgridbackup.agent.v1.Agent.TestRepository:input_type -> voidgridbackup.agent.v1.TestRepositoryRequest
+	49, // 48: voidgridbackup.agent.v1.Agent.TakeMaintenance:input_type -> voidgridbackup.agent.v1.TakeMaintenanceRequest
+	51, // 49: voidgridbackup.agent.v1.Agent.MoveRepository:input_type -> voidgridbackup.agent.v1.MoveRepositoryRequest
+	35, // 50: voidgridbackup.agent.v1.Agent.PathUsage:input_type -> voidgridbackup.agent.v1.PathUsageRequest
+	38, // 51: voidgridbackup.agent.v1.Agent.RepoStats:input_type -> voidgridbackup.agent.v1.RepoStatsRequest
+	40, // 52: voidgridbackup.agent.v1.Agent.Logs:input_type -> voidgridbackup.agent.v1.LogsRequest
+	17, // 53: voidgridbackup.agent.v1.Agent.Ping:output_type -> voidgridbackup.agent.v1.PingResponse
+	2,  // 54: voidgridbackup.agent.v1.Agent.InitRepository:output_type -> voidgridbackup.agent.v1.InitRepositoryResponse
+	7,  // 55: voidgridbackup.agent.v1.Agent.Backup:output_type -> voidgridbackup.agent.v1.BackupResponse
+	56, // 56: voidgridbackup.agent.v1.Agent.Progress:output_type -> voidgridbackup.agent.v1.ProgressResponse
+	10, // 57: voidgridbackup.agent.v1.Agent.ListSnapshots:output_type -> voidgridbackup.agent.v1.ListSnapshotsResponse
+	13, // 58: voidgridbackup.agent.v1.Agent.ListDirectory:output_type -> voidgridbackup.agent.v1.ListDirectoryResponse
+	15, // 59: voidgridbackup.agent.v1.Agent.Restore:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	22, // 60: voidgridbackup.agent.v1.Agent.ListStacks:output_type -> voidgridbackup.agent.v1.ListStacksResponse
+	15, // 61: voidgridbackup.agent.v1.Agent.RestoreStack:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	26, // 62: voidgridbackup.agent.v1.Agent.ImportDump:output_type -> voidgridbackup.agent.v1.ImportDumpResponse
+	30, // 63: voidgridbackup.agent.v1.Agent.ListVMs:output_type -> voidgridbackup.agent.v1.ListVMsResponse
+	15, // 64: voidgridbackup.agent.v1.Agent.RestoreVM:output_type -> voidgridbackup.agent.v1.RestoreResponse
+	34, // 65: voidgridbackup.agent.v1.Agent.Check:output_type -> voidgridbackup.agent.v1.CheckResponse
+	44, // 66: voidgridbackup.agent.v1.Agent.DeleteSnapshot:output_type -> voidgridbackup.agent.v1.DeleteSnapshotResponse
+	46, // 67: voidgridbackup.agent.v1.Agent.WipeRepository:output_type -> voidgridbackup.agent.v1.WipeRepositoryResponse
+	54, // 68: voidgridbackup.agent.v1.Agent.Maintain:output_type -> voidgridbackup.agent.v1.MaintainResponse
+	48, // 69: voidgridbackup.agent.v1.Agent.TestRepository:output_type -> voidgridbackup.agent.v1.TestRepositoryResponse
+	50, // 70: voidgridbackup.agent.v1.Agent.TakeMaintenance:output_type -> voidgridbackup.agent.v1.TakeMaintenanceResponse
+	52, // 71: voidgridbackup.agent.v1.Agent.MoveRepository:output_type -> voidgridbackup.agent.v1.MoveRepositoryResponse
+	37, // 72: voidgridbackup.agent.v1.Agent.PathUsage:output_type -> voidgridbackup.agent.v1.PathUsageResponse
+	39, // 73: voidgridbackup.agent.v1.Agent.RepoStats:output_type -> voidgridbackup.agent.v1.RepoStatsResponse
+	42, // 74: voidgridbackup.agent.v1.Agent.Logs:output_type -> voidgridbackup.agent.v1.LogsResponse
+	53, // [53:75] is the sub-list for method output_type
+	31, // [31:53] is the sub-list for method input_type
 	31, // [31:31] is the sub-list for extension type_name
 	31, // [31:31] is the sub-list for extension extendee
 	0,  // [0:31] is the sub-list for field type_name
@@ -4037,7 +4211,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   56,
+			NumMessages:   58,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

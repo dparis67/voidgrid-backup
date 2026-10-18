@@ -50,3 +50,49 @@ func logProgress(path string, p *upload.CountingUploadProgress) (stop func()) {
 		<-finished
 	}
 }
+
+// UploadProgress is what the upload running now has done so far.
+type UploadProgress struct {
+	Path           string
+	Started        time.Time
+	Files          int64 // hashed and unchanged files seen so far
+	HashedFiles    int64
+	CachedFiles    int64
+	HashedBytes    int64
+	CachedBytes    int64
+	EstimatedBytes int64 // 0 until Kopia has finished sizing the source
+	Dir            string
+}
+
+// trackUpload registers an upload so Progress can report it. The returned
+// func ends it.
+func (e *Engine) trackUpload(path string, p *upload.CountingUploadProgress) (done func()) {
+	e.progMu.Lock()
+	e.prog, e.progPath, e.progStart = p, path, time.Now()
+	e.progMu.Unlock()
+	return func() {
+		e.progMu.Lock()
+		if e.prog == p {
+			e.prog = nil
+		}
+		e.progMu.Unlock()
+	}
+}
+
+// Progress reports the upload running now; ok is false when none is.
+func (e *Engine) Progress() (UploadProgress, bool) {
+	e.progMu.Lock()
+	p, path, start := e.prog, e.progPath, e.progStart
+	e.progMu.Unlock()
+	if p == nil {
+		return UploadProgress{}, false
+	}
+	c := p.Snapshot()
+	return UploadProgress{
+		Path: path, Started: start,
+		Files:       int64(c.TotalHashedFiles) + int64(c.TotalCachedFiles),
+		HashedFiles: int64(c.TotalHashedFiles), CachedFiles: int64(c.TotalCachedFiles),
+		HashedBytes: c.TotalHashedBytes, CachedBytes: c.TotalCachedBytes,
+		EstimatedBytes: c.EstimatedBytes, Dir: c.CurrentDirectory,
+	}, true
+}

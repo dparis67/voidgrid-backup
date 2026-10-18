@@ -16,6 +16,9 @@ service Agent {
   // password with every call; the agent keeps only a local Kopia cache.
   rpc InitRepository(InitRepositoryRequest) returns (InitRepositoryResponse);
   rpc Backup(BackupRequest) returns (BackupResponse);
+  // Progress reports the upload running now. It never waits for the agent's
+  // operation lock, so it answers while a backup holds it.
+  rpc Progress(ProgressRequest) returns (ProgressResponse);
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
   rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
   rpc Restore(RestoreRequest) returns (RestoreResponse);
@@ -467,4 +470,23 @@ message MaintainResponse {
   // How long the request waited for the agent to finish earlier operations
   // before it started. 0 from an agent that predates the field.
   int64 queued_ms = 3;
+}
+
+message ProgressRequest {}
+
+message ProgressResponse {
+  // False when no upload is running (idle, or still queued behind another
+  // operation); the rest is then empty.
+  bool running = 1;
+  string path = 2;
+  int64 started_unix = 3;
+  // Files hashed or taken unchanged from the previous snapshot so far.
+  int64 files = 4;
+  int64 hashed_files = 5;
+  int64 cached_files = 6;
+  int64 hashed_bytes = 7;
+  int64 cached_bytes = 8;
+  // The source's size as Kopia estimates it; 0 until the estimate is done.
+  int64 estimated_bytes = 9;
+  string dir = 10;
 }

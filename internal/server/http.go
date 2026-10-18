@@ -556,6 +556,7 @@ type jobRow struct {
 	Last        *catalog.Run
 	Next        time.Time
 	Running     bool
+	Progress    *RunProgress  // where its upload is, while it runs and its agent reports one
 	Clashes     []string      // other jobs it would run alongside in the next 24 h
 	Dur         time.Duration // how long a run is expected to take; see jobDuration
 	Longest     time.Duration // the longest of the runs Dur was taken from
@@ -564,9 +565,11 @@ type jobRow struct {
 
 type jobsPage struct {
 	base
-	Jobs   []jobRow
-	Agents []catalog.Agent
-	Repos  []catalog.Repository
+	Jobs []jobRow
+	// AnyRunning makes the page refresh faster, so progress moves.
+	AnyRunning bool
+	Agents     []catalog.Agent
+	Repos      []catalog.Repository
 	// RepoAgents maps a repository ID to the space-separated IDs of the agents
 	// that can take a job on it ("" when it has no assignments: any agent).
 	// Defaults maps an agent ID to its default repository ID. The add-job form
@@ -614,6 +617,9 @@ func (u *ui) renderJobs(w http.ResponseWriter, r *http.Request, code int, p jobs
 		rows, err := u.c.ConversionPreview(ctx, time.Now())
 		p.ConvertOffer = err == nil && len(rows) > 0
 	}
+	for _, j := range p.Jobs {
+		p.AnyRunning = p.AnyRunning || j.Running
+	}
 	p.Sort = sortJobs(p.Jobs, r.URL.Query().Get("sort"), r.URL.Query().Get("dir") == "desc")
 	p.Desc = p.Sort != "" && r.URL.Query().Get("dir") == "desc"
 	if p.Form == nil {
@@ -630,6 +636,9 @@ func (u *ui) renderJobs(w http.ResponseWriter, r *http.Request, code int, p jobs
 
 func (u *ui) jobRow(ctx context.Context, j catalog.Job, agents []catalog.Agent, repos []catalog.Repository) jobRow {
 	row := jobRow{Job: j, Running: u.c.IsRunning(j.ID)}
+	if p, ok := u.c.JobProgress(j.ID); ok {
+		row.Progress = &p
+	}
 	for _, a := range agents {
 		if a.ID == j.AgentID {
 			row.Agent = a.Name

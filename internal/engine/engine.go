@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	kfs "github.com/kopia/kopia/fs"
@@ -129,6 +130,16 @@ type Engine struct {
 	readOnly bool
 	uid      int
 	cache    CacheConfig
+
+	// The upload in progress, for Progress. One at a time: the agent runs a
+	// single backup at once.
+	progMu    sync.Mutex
+	prog      *upload.CountingUploadProgress
+	progPath  string
+	progStart time.Time
+	// uploadHook, when set (tests), runs once the upload is registered and
+	// before its first byte is read.
+	uploadHook func()
 }
 
 // CacheConfig is Kopia's local cache for each repository the engine opens.
@@ -372,6 +383,10 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 			progress := &upload.CountingUploadProgress{}
 			stop := logProgress(si.Path, progress)
 			defer stop()
+			defer e.trackUpload(si.Path, progress)()
+			if e.uploadHook != nil {
+				e.uploadHook()
+			}
 			u := upload.NewUploader(w)
 			u.Progress = progress
 			man, err = u.Upload(ctx, entry, tree, si, prev...)
