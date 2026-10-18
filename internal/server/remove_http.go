@@ -60,7 +60,7 @@ func (u *ui) deleteSnapshot(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/jobs/"+id, "Type the snapshot ID shown in the box to confirm deleting it.")
 		return
 	}
-	if err := u.c.DeleteSnapshot(r.Context(), id, sid); err != nil {
+	if err := u.c.DeleteSnapshotOn(r.Context(), id, sid, r.FormValue("on")); err != nil {
 		if errors.Is(err, catalog.ErrNotFound) {
 			http.NotFound(w, r)
 			return

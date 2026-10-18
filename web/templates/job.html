@@ -74,7 +74,7 @@
   <div class="row">
     <h2 style="margin:28px 0 10px">Snapshots</h2>
     <form method="post" action="/jobs/{{$job.ID}}/snapshots/refresh"><button class="plain" type="submit" {{if .SnapBusy}}disabled{{end}}>Refresh from repository</button></form>
-    <span class="muted">{{if .SnapSynced}}checked against the repository {{when .SnapAsOf}}{{else}}not checked against the repository yet{{end}}{{if .SnapBusy}} · refreshing…{{end}}</span>
+    <span class="muted">{{if .SnapSynced}}checked against the repository {{when .SnapAsOf}}{{if .SnapVia}} through {{.SnapVia}} (the job's agent could not reach it){{end}}{{else}}not checked against the repository yet{{end}}{{if .SnapBusy}} · refreshing…{{end}}</span>
   </div>
   <div class="card">
     {{if .SnapError}}<div class="empty err">Could not list snapshots: {{.SnapError}}</div>
@@ -90,7 +90,7 @@
           <td class="num">{{bytes .Bytes}}</td>
           <td class="num">{{if .Errors}}<span class="bad">{{.Errors}}</span>{{else}}0{{end}}{{if .Incomplete}} <span class="warn">incomplete: {{.Incomplete}}</span>{{end}}</td>
           <td class="mono">{{short .ID}}</td>
-          <td><form method="post" action="/jobs/{{$job.ID}}/snapshots/{{.ID}}/delete" title="Type {{short .ID}} to delete this snapshot. Space is freed by a later maintenance run."><input name="confirm" placeholder="{{short .ID}}" size="9" autocomplete="off"> <button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Delete</button></form></td>
+          <td><form method="post" action="/jobs/{{$job.ID}}/snapshots/{{.ID}}/delete" title="Type {{short .ID}} to delete this snapshot. Space is freed by a later maintenance run."><input name="confirm" placeholder="{{short .ID}}" size="9" autocomplete="off"> {{if and $.AgentDown $.ServerOK}}<select name="on" title="The job's agent cannot be reached. Deleting through the server needs you to say so."><option value="">through {{$job.Agent}}</option><option value="server">through the server</option></select> {{end}}<button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Delete</button></form></td>
         </tr>
       {{end}}
       </tbody>

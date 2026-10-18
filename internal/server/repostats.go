@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
@@ -23,6 +24,9 @@ type RepoStats struct {
 	FSTotal     int64     `json:"fs_total,omitempty"` // filesystem repositories only
 	FSAvail     int64     `json:"fs_avail,omitempty"`
 	At          time.Time `json:"at"`
+	// Via is who measured it when that was not an agent ("the server"): an
+	// agent could not open the repository and the server could.
+	Via string `json:"via,omitempty"`
 }
 
 func repoStatsKey(repoID string) string { return "repo_stats:" + repoID }
@@ -52,28 +56,61 @@ func (c *Controller) RefreshRepoStats(ctx context.Context, repoID string) (RepoS
 	if repo.InitializedAt.IsZero() {
 		return RepoStats{}, ErrNotInitialized
 	}
-	agent, err := c.agentForRepo(ctx, repoID)
-	if err != nil {
-		return RepoStats{}, err
-	}
 	release, err := c.gate.acquire(ctx, repoID)
 	if err != nil {
 		return RepoStats{}, err
 	}
 	defer release()
+	st, err := c.measureOnAgent(ctx, repo)
+	if err != nil {
+		// Reads fall back to the server when it can open the repository itself.
+		if c.ServerCanOpen(repo) != nil {
+			return RepoStats{}, err
+		}
+		var serr error
+		if st, serr = c.measureOnServer(ctx, repo); serr != nil {
+			return RepoStats{}, fmt.Errorf("%w (and the server could not measure it either: %v)", err, serr)
+		}
+		slog.Warn("repository measured through the server", "repo", repo.ID, "agent_error", err)
+	}
+	b, _ := json.Marshal(st)
+	if err := c.Catalog.SetSetting(context.WithoutCancel(ctx), repoStatsKey(repoID), string(b)); err != nil {
+		return st, err
+	}
+	return st, nil
+}
+
+// measureOnAgent totals the repository's blobs through the agent that runs a
+// job on it, or failing that any enrolled agent.
+func (c *Controller) measureOnAgent(ctx context.Context, repo catalog.Repository) (RepoStats, error) {
+	agent, err := c.agentForRepo(ctx, repo.ID)
+	if err != nil {
+		return RepoStats{}, err
+	}
 	resp, err := withAgent(c, agent, repoStatsTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RepoStatsResponse, error) {
 		return cl.RepoStats(ctx, &agentpb.RepoStatsRequest{Repository: toProtoRepo(repo, agent.ID)})
 	})
 	if err != nil {
 		return RepoStats{}, err
 	}
-	st := RepoStats{StoredBytes: resp.GetStoredBytes(), Blobs: resp.GetBlobs(),
-		FSTotal: resp.GetFsTotal(), FSAvail: resp.GetFsAvail(), At: time.Now()}
-	b, _ := json.Marshal(st)
-	if err := c.Catalog.SetSetting(context.WithoutCancel(ctx), repoStatsKey(repoID), string(b)); err != nil {
-		return st, err
+	return RepoStats{StoredBytes: resp.GetStoredBytes(), Blobs: resp.GetBlobs(),
+		FSTotal: resp.GetFsTotal(), FSAvail: resp.GetFsAvail(), At: time.Now()}, nil
+}
+
+// measureOnServer totals the repository's blobs through the server's own engine.
+func (c *Controller) measureOnServer(ctx context.Context, repo catalog.Repository) (RepoStats, error) {
+	er, err := serverRepo(repo)
+	if err != nil {
+		return RepoStats{}, err
 	}
-	return st, nil
+	ctx, cancel := context.WithTimeout(ctx, repoStatsTimeout)
+	defer cancel()
+	res, err := c.Engine.RepoStats(ctx, er)
+	if err != nil {
+		return RepoStats{}, err
+	}
+	return RepoStats{StoredBytes: res.StoredBytes, Blobs: res.Blobs, FSTotal: res.FSTotal, FSAvail: res.FSAvail,
+		At: time.Now(), Via: "the server"}, nil
 }
 
 func (c *Controller) agentForRepo(ctx context.Context, repoID string) (catalog.Agent, error) {

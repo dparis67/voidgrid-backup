@@ -30,7 +30,7 @@
       <div><dt>Jobs</dt><dd>{{.Jobs}}</dd></div>
       <div><dt>Initialized</dt><dd>{{if .InitializedAt.IsZero}}<span class="warn">no</span>{{else}}{{when .InitializedAt}}{{end}}</dd></div>
       <div><dt>Stored</dt>
-        <dd>{{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}</span>{{else}}<span class="muted">not measured</span>{{end}}
+        <dd>{{if .Measuring}}<span class="running">measuring…</span> {{end}}{{if .Stats}}{{bytes .Stats.StoredBytes}} <span class="muted">in {{.Stats.Blobs}} blobs{{if .Stats.FSTotal}}, {{bytes .Stats.FSAvail}} free of {{bytes .Stats.FSTotal}}{{end}}, {{when .Stats.At}}{{if .Stats.Via}}, measured by {{.Stats.Via}}{{end}}</span>{{else}}<span class="muted">not measured</span>{{end}}
           {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/stats" class="inline"><button class="plain" type="submit" {{if .Measuring}}disabled{{end}}>{{if .Stats}}Refresh{{else}}Measure{{end}}</button></form>{{end}}</dd></div>
       <div><dt>Maintenance</dt>
         <dd>{{if .Maintaining}}<span class="running">running…</span>
@@ -61,6 +61,11 @@
       <summary class="muted">Manage…</summary>
       <div class="repo-sections">
         {{if not .InitializedAt.IsZero}}
+        <form method="post" action="/repositories/{{.ID}}/reach">
+          <h3>Check access</h3>
+          <p class="hint">Asks every agent assigned to this repository, and the server{{if not .ServerOK}} (which cannot open it as things are set up: a filesystem repository needs its path on the server){{end}}, to open it, and says which can. Nothing is written to the storage.</p>
+          <button class="plain" type="submit">Check access</button>
+        </form>
         <form method="post" action="/repositories/{{.ID}}/agents">
           <h3>Assign an agent</h3>
           <p class="hint">The agent opens the repository first (it never creates anything) and is assigned only if that works. Picking an agent that is already assigned tests it again{{if eq .Config.Kind "sftp"}} or changes its key{{end}}. Only assigned agents can get new jobs on this repository.</p>
@@ -87,7 +92,7 @@
           </form>
           <form method="post" action="/repositories/{{.ID}}/wipe">
             <p class="hint"><strong>Wipe all its data.</strong> Deletes every backup in this repository from storage and cannot be undone. Space is freed at once. Pick an agent that can reach the storage.</p>
-            <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+            <select name="agent">{{range $.Agents}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{if .ServerOK}}<option value="server">the server</option>{{end}}</select>
             <input name="confirm" placeholder="{{.Name}}" autocomplete="off"> <button class="plain" type="submit">Wipe</button>
           </form>
           {{end}}

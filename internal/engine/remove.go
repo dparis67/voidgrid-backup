@@ -22,7 +22,14 @@ import (
 // deleted. The data it referenced stays in storage until a later full
 // maintenance cycle garbage-collects it.
 func (e *Engine) DeleteSnapshot(ctx context.Context, r Repo, snapshotID string) error {
-	return e.deleteSnapshots(ctx, r, []string{snapshotID}, false)
+	return e.deleteSnapshots(ctx, r, []string{snapshotID}, false, e.hostname)
+}
+
+// DeleteSnapshotOf forgets one snapshot that host made, which is how the server
+// deletes an agent's snapshot through its own engine when the agent cannot
+// reach the repository. A snapshot of any other host is refused.
+func (e *Engine) DeleteSnapshotOf(ctx context.Context, r Repo, host, snapshotID string) error {
+	return e.deleteSnapshots(ctx, r, []string{snapshotID}, false, host)
 }
 
 // DeleteSnapshots forgets several snapshots in one repository session. A
@@ -31,10 +38,10 @@ func (e *Engine) DeleteSnapshot(ctx context.Context, r Repo, snapshotID string) 
 // is there is checked to be this agent's own before any is deleted, so a
 // refusal leaves them all in place.
 func (e *Engine) DeleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string) error {
-	return e.deleteSnapshots(ctx, r, snapshotIDs, true)
+	return e.deleteSnapshots(ctx, r, snapshotIDs, true, e.hostname)
 }
 
-func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string, skipMissing bool) error {
+func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []string, skipMissing bool, host string) error {
 	if len(snapshotIDs) == 0 {
 		return nil
 	}
@@ -54,7 +61,7 @@ func (e *Engine) deleteSnapshots(ctx context.Context, r Repo, snapshotIDs []stri
 		if err != nil {
 			return fmt.Errorf("load snapshot %s: %w", sid, err)
 		}
-		if man.Source.Host != e.hostname || man.Source.UserName != Username {
+		if man.Source.Host != host || man.Source.UserName != Username {
 			return fmt.Errorf("snapshot %s belongs to %s@%s, not to this agent", sid, man.Source.UserName, man.Source.Host)
 		}
 		ids = append(ids, id)

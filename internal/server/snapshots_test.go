@@ -107,7 +107,7 @@ func TestSnapshotIndex(t *testing.T) {
 		t.Fatalf("second backup: %+v %v", run, err)
 	}
 	second, _ := c.Snapshots(ctx, job.ID)
-	live, err := c.listRemoteSnapshots(ctx, job.ID)
+	live, _, err := c.listRemoteSnapshots(ctx, job.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

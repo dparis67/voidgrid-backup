@@ -429,6 +429,32 @@ the same way as the SFTP one. It has not been, and it should be tested against
 a real bucket first, since S3 itself has not yet been exercised against real
 storage here.
 
+#### When only the server can reach a repository
+
+A repository is normally opened by an agent. If the server can open it itself
+(S3, SFTP with the key at the same path inside the **server** container, or a
+filesystem directory given as **Path on the server**), it can stand in when no
+agent can reach it. **Manage, Check access** on a repository asks every agent
+assigned to it, and the server, to open it and says which can.
+
+- **Reads fall back by themselves.** Measuring a repository and refreshing a
+  job's snapshot list try the agent first and, if it fails and the server can
+  open the repository, do it through the server's own engine. The card says
+  "measured by the server" and the job page says the list was made through the
+  server. Browsing and restoring through the server already had a picker.
+- **Deletes are explicit.** Deleting a snapshot and wiping a repository never
+  fall back. A snapshot's delete form offers **through the server** only when
+  the job's agent is unreachable and the server can open the repository. The
+  wipe form always lists **the server** next to the agents when it can. The
+  server only deletes snapshots that belong to the job's agent.
+- The server then needs the storage credentials and the repository password
+  (it already holds the passwords). A compromised server exposes that storage,
+  as it already does through the passwords and configs.
+- Not covered yet: creating a repository from the server, editing a
+  repository's location through it, and deleting a job together with its
+  snapshots when its agent is down (delete the snapshots one by one through the
+  server first).
+
 #### Maintenance
 
 Maintenance (compaction and garbage collection) is run by the repository's

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 )
 
@@ -89,9 +90,13 @@ func (c *Controller) StartWipe(ctx context.Context, repoID, agentID string) erro
 	if err != nil {
 		return err
 	}
-	agent, err := c.Catalog.Agent(ctx, agentID)
-	if err != nil {
-		return fmt.Errorf("agent: %w", err)
+	agent := serverAsAgent
+	if agentID != ServerHost {
+		if agent, err = c.Catalog.Agent(ctx, agentID); err != nil {
+			return fmt.Errorf("agent: %w", err)
+		}
+	} else if err := c.ServerCanOpen(repo); err != nil {
+		return fmt.Errorf("the server cannot open this repository: %w", err)
 	}
 	if err := c.repoIdle(ctx, repoID); err != nil {
 		return err
@@ -106,7 +111,10 @@ func (c *Controller) StartWipe(ctx context.Context, repoID, agentID string) erro
 		defer c.inflight.done(repoWipeKey(repoID))
 		bg := context.Background()
 		slog.Warn("repository wipe requested", "repo", repo.ID, "name", repo.Name, "agent", agent.Name)
-		resp, err := withAgent(c, agent, wipeTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.WipeRepositoryResponse, error) {
+		resp, err := runOn(c, agent, repo, wipeTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.WipeRepositoryResponse, error) {
+			blobs, bytes, err := c.Engine.Wipe(ctx, er)
+			return &agentpb.WipeRepositoryResponse{Blobs: blobs, Bytes: bytes}, err
+		}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.WipeRepositoryResponse, error) {
 			return cl.WipeRepository(ctx, &agentpb.WipeRepositoryRequest{Repository: toProtoRepo(repo, agent.ID)})
 		})
 		if err != nil {
@@ -170,9 +178,18 @@ func (c *Controller) DeleteJob(ctx context.Context, jobID string, snapshots bool
 	return n, c.Catalog.DeleteJob(ctx, jobID)
 }
 
-// DeleteSnapshot forgets one snapshot of a job. Its data is released only by
-// later full maintenance. The snapshot must be in the job's recorded list.
+// DeleteSnapshot forgets one snapshot of a job through the job's agent. Its
+// data is released only by later full maintenance. The snapshot must be in the
+// job's recorded list.
 func (c *Controller) DeleteSnapshot(ctx context.Context, jobID, snapshotID string) error {
+	return c.DeleteSnapshotOn(ctx, jobID, snapshotID, "")
+}
+
+// DeleteSnapshotOn is DeleteSnapshot through on: "" for the job's agent, or
+// ServerHost for the server's own engine, for when that agent cannot reach the
+// repository and the server can. It never falls back by itself: a delete runs
+// where it was asked to.
+func (c *Controller) DeleteSnapshotOn(ctx context.Context, jobID, snapshotID, on string) error {
 	if !c.inflight.start(jobID) {
 		return ErrRunning
 	}
@@ -188,11 +205,24 @@ func (c *Controller) DeleteSnapshot(ctx context.Context, jobID, snapshotID strin
 	if !slices.ContainsFunc(snaps, func(s catalog.Snapshot) bool { return s.ID == snapshotID }) {
 		return errors.New("that snapshot is not in the job's list; refresh the list from the repository first")
 	}
-	if _, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
+	switch on {
+	case "":
+	case ServerHost:
+		if err := c.ServerCanOpen(repo); err != nil {
+			return fmt.Errorf("the server cannot open this repository: %w", err)
+		}
+		agent = serverAsAgent
+	default:
+		return fmt.Errorf("unknown place to delete from: %q", on)
+	}
+	if _, err := runOn(c, agent, repo, browseTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.DeleteSnapshotResponse, error) {
+		// The snapshot is the job's agent's: the server acts for that host only.
+		return &agentpb.DeleteSnapshotResponse{}, c.Engine.DeleteSnapshotOf(ctx, er, job.AgentID, snapshotID)
+	}, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.DeleteSnapshotResponse, error) {
 		return cl.DeleteSnapshot(ctx, &agentpb.DeleteSnapshotRequest{Repository: toProtoRepo(repo, agent.ID), SnapshotId: snapshotID})
 	}); err != nil {
 		return fmt.Errorf("delete on %s: %w", agent.Name, err)
 	}
-	slog.Warn("snapshot deleted", "job", job.Name, "repo", repo.ID, "snapshot", snapshotID)
+	slog.Warn("snapshot deleted", "job", job.Name, "repo", repo.ID, "snapshot", snapshotID, "on", agent.Name)
 	return c.Catalog.UpsertSnapshots(context.WithoutCancel(ctx), jobID, nil, []string{snapshotID})
 }

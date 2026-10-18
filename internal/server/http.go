@@ -80,6 +80,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("GET /repositories/{id}/edit", u.editRepositoryForm)
 	mux.HandleFunc("POST /repositories/{id}/edit", u.editRepository)
 	mux.HandleFunc("POST /agents/{id}/delete", u.deleteAgent)
+	mux.HandleFunc("POST /repositories/{id}/reach", u.reachRepository)
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
@@ -373,6 +374,7 @@ type repoRow struct {
 	MaintBy     string                   // "server" or "agent": who runs maintenance
 	Assigned    []assignedAgent
 	Unassigned  []catalog.Agent // agents that could still be assigned
+	ServerOK    bool            // the server can open it itself, so it can stand in for an agent
 }
 
 // assignedAgent is an agent that may use a repository.
@@ -414,7 +416,7 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		return
 	}
 	for _, rp := range repos {
-		row := repoRow{Repository: rp, Location: rp.Config.Location()}
+		row := repoRow{Repository: rp, Location: rp.Config.Location(), ServerOK: u.c.ServerCanOpen(rp) == nil}
 		if st, ok, _ := u.c.RepoStats(ctx, rp.ID); ok {
 			row.Stats = &st
 		}
@@ -702,6 +704,13 @@ type jobPage struct {
 	SnapAsOf   time.Time // when the snapshot list was last made to match the repository
 	SnapSynced bool
 	SnapBusy   bool // a refresh from the repository is running
+	// SnapVia is "the server" when it made the last snapshot list because the
+	// job's agent could not reach the repository.
+	SnapVia string
+	// AgentDown and ServerOK decide whether a snapshot delete offers to run on
+	// the server: only when the job's agent is unreachable and the server can
+	// open the repository.
+	AgentDown, ServerOK bool
 }
 
 func (u *ui) job(w http.ResponseWriter, r *http.Request) {
@@ -726,6 +735,13 @@ func (u *ui) job(w http.ResponseWriter, r *http.Request) {
 		p.SnapError = err.Error()
 	}
 	p.SnapAsOf, p.SnapSynced = u.c.SnapshotsSynced(ctx, j.ID)
+	p.SnapVia = u.c.SnapshotsVia(ctx, j.ID)
+	if ag, aerr := u.c.Catalog.Agent(ctx, j.AgentID); aerr != nil || ag.LastError != "" {
+		p.AgentDown = true
+	}
+	if rp, rerr := u.c.Catalog.Repository(ctx, j.RepositoryID); rerr == nil {
+		p.ServerOK = u.c.ServerCanOpen(rp) == nil
+	}
 	// A job whose list has never been checked against the repository (every
 	// job from before the list was kept here) gets one background refresh.
 	if !p.SnapSynced {

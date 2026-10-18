@@ -497,6 +497,14 @@ func claimMaintenance(ctx context.Context, rep repo.Repository) error {
 // ListSnapshots returns this host's snapshots of the given paths (all of
 // this host's snapshots when paths is empty), newest first.
 func (e *Engine) ListSnapshots(ctx context.Context, r Repo, paths []string) ([]Snapshot, error) {
+	return e.ListSnapshotsOf(ctx, r, e.hostname, paths)
+}
+
+// ListSnapshotsOf lists the snapshots that host made, which is how the server
+// lists an agent's snapshots through its own engine when the agent cannot reach
+// the repository. The host only selects which snapshots to list; the connection
+// is still this engine's own.
+func (e *Engine) ListSnapshotsOf(ctx context.Context, r Repo, host string, paths []string) ([]Snapshot, error) {
 	rep, err := e.open(ctx, r)
 	if err != nil {
 		return nil, err
@@ -510,7 +518,7 @@ func (e *Engine) ListSnapshots(ctx context.Context, r Repo, paths []string) ([]S
 			return nil, err
 		}
 		for _, s := range all {
-			if s.Host == e.hostname && s.UserName == Username {
+			if s.Host == host && s.UserName == Username {
 				sources = append(sources, s)
 			}
 		}
@@ -520,7 +528,7 @@ func (e *Engine) ListSnapshots(ctx context.Context, r Repo, paths []string) ([]S
 			if err != nil {
 				return nil, err
 			}
-			sources = append(sources, snapshot.SourceInfo{Host: e.hostname, UserName: Username, Path: path})
+			sources = append(sources, snapshot.SourceInfo{Host: host, UserName: Username, Path: path})
 		}
 	}
 

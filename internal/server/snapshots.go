@@ -25,6 +25,17 @@ func (c *Controller) snapLock(jobID string) *sync.Mutex {
 
 func snapshotsSyncedKey(jobID string) string { return "snapshots_synced:" + jobID }
 
+// snapshotsViaKey holds who last listed the job's snapshots when it was not the
+// job's agent (the server, because the agent could not reach the repository).
+func snapshotsViaKey(jobID string) string { return "snapshots_via:" + jobID }
+
+// SnapshotsVia is "the server" when the last refresh of the job's snapshot list
+// was done by the server, "" when its agent did it.
+func (c *Controller) SnapshotsVia(ctx context.Context, jobID string) string {
+	v, _ := c.Catalog.GetSetting(ctx, snapshotsViaKey(jobID))
+	return v
+}
+
 // Snapshots returns the job's snapshots from the server's own record. It
 // never contacts the repository, so it is fast and works when the agent or
 // the storage is down; RefreshSnapshots brings the record in line with the
@@ -63,12 +74,15 @@ func (c *Controller) RefreshSnapshots(ctx context.Context, jobID string) error {
 	mu := c.snapLock(jobID)
 	mu.Lock()
 	defer mu.Unlock()
-	snaps, err := c.listRemoteSnapshots(ctx, jobID)
+	snaps, via, err := c.listRemoteSnapshots(ctx, jobID)
 	if err != nil {
 		return err
 	}
 	if err := c.Catalog.ReplaceSnapshots(ctx, jobID, snaps); err != nil {
 		return err
+	}
+	if err := c.Catalog.SetSetting(ctx, snapshotsViaKey(jobID), via); err != nil {
+		slog.Warn("record who listed the snapshots", "job", jobID, "err", err)
 	}
 	return c.Catalog.SetSetting(ctx, snapshotsSyncedKey(jobID), strconv.FormatInt(time.Now().Unix(), 10))
 }

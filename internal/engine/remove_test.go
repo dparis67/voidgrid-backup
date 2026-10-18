@@ -187,3 +187,37 @@ func TestDeleteSnapshotsBatch(t *testing.T) {
 		t.Fatal("deleting a single missing snapshot is still an error")
 	}
 }
+
+func TestListAndDeleteSnapshotsOfAnotherHost(t *testing.T) {
+	ctx := context.Background()
+	e, r, src, _ := removeFixture(t) // host-a
+	res, err := e.Backup(ctx, r, []string{src}, nil, Retention{Latest: 10})
+	if err != nil || res[0].Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	sid := res[0].SnapshotID
+
+	// The server's engine is another host. Its own list is empty; asked for
+	// host-a's it sees the snapshot.
+	other := newEngine(t, "host-b")
+	if own, err := other.ListSnapshots(ctx, r, []string{src}); err != nil || len(own) != 0 {
+		t.Fatalf("host-b's own list: %d %v", len(own), err)
+	}
+	of, err := other.ListSnapshotsOf(ctx, r, "host-a", []string{src})
+	if err != nil || len(of) != 1 || of[0].ID != sid {
+		t.Fatalf("host-a's snapshots through host-b: %+v %v", of, err)
+	}
+	// Deleting acts for the named host only.
+	if err := other.DeleteSnapshotOf(ctx, r, "host-c", sid); err == nil || !strings.Contains(err.Error(), "not to this agent") {
+		t.Fatalf("deleting as the wrong host: %v", err)
+	}
+	if err := other.DeleteSnapshot(ctx, r, sid); err == nil {
+		t.Fatal("host-b deleted host-a's snapshot as itself")
+	}
+	if err := other.DeleteSnapshotOf(ctx, r, "host-a", sid); err != nil {
+		t.Fatalf("deleting as host-a: %v", err)
+	}
+	if left, _ := e.ListSnapshots(ctx, r, []string{src}); len(left) != 0 {
+		t.Fatalf("the snapshot is still there: %d", len(left))
+	}
+}

@@ -492,12 +492,14 @@ func summarizeCheck(run *catalog.Run, resp *agentpb.CheckResponse) {
 	run.Error = strings.Join(errs, "\n")
 }
 
-// listRemoteSnapshots asks the job's agent to list the job's snapshots from the
-// repository itself, which opens a connection to its storage.
-func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) ([]Snapshot, error) {
+// listRemoteSnapshots lists the job's snapshots from the repository itself,
+// which opens a connection to its storage. The job's agent does it; when the
+// agent cannot reach the repository and the server can, the server lists them
+// through its own engine instead, and via says so.
+func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) (snaps []Snapshot, via string, err error) {
 	job, repo, agent, err := c.jobContext(ctx, jobID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	paths := job.Paths
 	if job.Stack != nil {
@@ -510,7 +512,26 @@ func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) ([]S
 		return cl.ListSnapshots(ctx, &agentpb.ListSnapshotsRequest{Repository: toProtoRepo(repo, agent.ID), Paths: paths})
 	})
 	if err != nil {
-		return nil, err
+		if c.ServerCanOpen(repo) != nil {
+			return nil, "", err
+		}
+		er, serr := serverRepo(repo)
+		if serr != nil {
+			return nil, "", err
+		}
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), browseTimeout)
+		defer cancel()
+		list, lerr := c.Engine.ListSnapshotsOf(sctx, er, job.AgentID, paths)
+		if lerr != nil {
+			return nil, "", fmt.Errorf("%w (and the server could not list them either: %v)", err, lerr)
+		}
+		slog.Warn("snapshots listed through the server", "job", job.Name, "agent", agent.Name, "agent_error", err)
+		out := make([]Snapshot, 0, len(list))
+		for _, s := range list {
+			out = append(out, Snapshot{ID: s.ID, Path: s.Path, Start: time.Unix(s.Start, 0), End: time.Unix(s.End, 0),
+				Bytes: s.Bytes, Files: s.Files, Errors: s.Errors, Incomplete: s.Incomplete})
+		}
+		return out, "the server", nil
 	}
 	out := make([]Snapshot, 0, len(resp.GetSnapshots()))
 	for _, s := range resp.GetSnapshots() {
@@ -520,7 +541,7 @@ func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) ([]S
 			Bytes: s.GetBytes(), Files: int(s.GetFiles()), Errors: int(s.GetErrors()), Incomplete: s.GetIncomplete(),
 		})
 	}
-	return out, nil
+	return out, "", nil
 }
 
 // Browse lists a directory of a snapshot on the job's agent, or on onID when
