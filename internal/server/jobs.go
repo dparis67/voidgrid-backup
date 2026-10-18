@@ -94,8 +94,14 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	} else if !errors.Is(err, catalog.ErrNotFound) {
 		return catalog.Repository{}, "", err
 	}
-	agent, err := c.Catalog.Agent(ctx, agentID)
-	if err != nil {
+	fromServer := agentID == ServerHost
+	var agent catalog.Agent
+	var err error
+	if fromServer {
+		if c.Engine == nil {
+			return catalog.Repository{}, "", errors.New("this server has no repository engine")
+		}
+	} else if agent, err = c.Catalog.Agent(ctx, agentID); err != nil {
 		return catalog.Repository{}, "", fmt.Errorf("agent: %w", err)
 	}
 	generated := ""
@@ -110,6 +116,9 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 		return catalog.Repository{}, "", err
 	}
 	r := catalog.Repository{ID: id, Name: name, Config: cfg, Password: password, CreatedAt: time.Now()}
+	if fromServer {
+		return c.initFromServer(ctx, r, generated)
+	}
 	if err := c.Catalog.AddRepository(ctx, r); err != nil {
 		return catalog.Repository{}, "", err
 	}

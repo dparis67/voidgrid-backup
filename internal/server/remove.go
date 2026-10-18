@@ -56,7 +56,7 @@ func (c *Controller) forgetRepository(ctx context.Context, repoID string) error 
 	if err := c.Catalog.DeleteRepository(ctx, repoID); err != nil {
 		return err
 	}
-	for _, key := range []string{repoStatsKey(repoID), repoWipeErrKey(repoID), repoMaintKey(repoID)} {
+	for _, key := range []string{repoStatsKey(repoID), repoWipeErrKey(repoID), repoMaintKey(repoID), repoServerCreatedKey(repoID)} {
 		if err := c.Catalog.SetSetting(ctx, key, ""); err != nil {
 			slog.Warn("clear repository setting", "key", key, "err", err)
 		}

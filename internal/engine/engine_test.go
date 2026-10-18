@@ -3,20 +3,15 @@ package engine
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/pem"
-	"errors"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/kopia/kopia/repo/maintenance"
-	"github.com/pkg/sftp"
-	"golang.org/x/crypto/ssh"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/sftptest"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -272,84 +267,5 @@ func appendInt(b []byte, n int) []byte {
 // accepting one generated client key. It stands in for a Storage Box.
 func startSFTPServer(t *testing.T) (port int, keyFile string) {
 	t.Helper()
-	_, hostPriv, _ := ed25519.GenerateKey(rand.Reader)
-	hostSigner, err := ssh.NewSignerFromKey(hostPriv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	clientPub, clientPriv, _ := ed25519.GenerateKey(rand.Reader)
-	allowed, err := ssh.NewPublicKey(clientPub)
-	if err != nil {
-		t.Fatal(err)
-	}
-	blk, err := ssh.MarshalPrivateKey(clientPriv, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyFile = filepath.Join(t.TempDir(), "id_ed25519")
-	if err := os.WriteFile(keyFile, pem.EncodeToMemory(blk), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := &ssh.ServerConfig{
-		PublicKeyCallback: func(_ ssh.ConnMetadata, k ssh.PublicKey) (*ssh.Permissions, error) {
-			if bytes.Equal(k.Marshal(), allowed.Marshal()) {
-				return nil, nil
-			}
-			return nil, errors.New("key not allowed")
-		},
-	}
-	cfg.AddHostKey(hostSigner)
-
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { lis.Close() })
-	go func() {
-		for {
-			c, err := lis.Accept()
-			if err != nil {
-				return
-			}
-			go serveSSH(c, cfg)
-		}
-	}()
-	return lis.Addr().(*net.TCPAddr).Port, keyFile
-}
-
-func serveSSH(c net.Conn, cfg *ssh.ServerConfig) {
-	sc, chans, reqs, err := ssh.NewServerConn(c, cfg)
-	if err != nil {
-		c.Close()
-		return
-	}
-	defer sc.Close()
-	go ssh.DiscardRequests(reqs)
-	for nc := range chans {
-		if nc.ChannelType() != "session" {
-			nc.Reject(ssh.UnknownChannelType, "session only")
-			continue
-		}
-		ch, creqs, err := nc.Accept()
-		if err != nil {
-			continue
-		}
-		go func() {
-			for req := range creqs {
-				ok := req.Type == "subsystem" && len(req.Payload) > 4 && string(req.Payload[4:]) == "sftp"
-				req.Reply(ok, nil)
-				if ok {
-					go func() {
-						srv, err := sftp.NewServer(ch)
-						if err == nil {
-							srv.Serve()
-							srv.Close()
-						}
-						ch.Close()
-					}()
-				}
-			}
-		}()
-	}
+	return sftptest.Start(t)
 }

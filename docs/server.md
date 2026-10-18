@@ -450,10 +450,24 @@ assigned to it, and the server, to open it and says which can.
 - The server then needs the storage credentials and the repository password
   (it already holds the passwords). A compromised server exposes that storage,
   as it already does through the passwords and configs.
-- Not covered yet: creating a repository from the server, editing a
-  repository's location through it, and deleting a job together with its
-  snapshots when its agent is down (delete the snapshots one by one through the
-  server first).
+- **Creating a repository from the server.** The add-repository form lists
+  **the server** next to the agents. The server then creates (or connects to)
+  the repository with its own engine, and it maintains it, since creating it
+  makes the server the Kopia maintenance owner. An SFTP key path is a path
+  inside the server container, and a filesystem repository needs its **Path on
+  the server**. No agent is assigned, and none counts as assigned until one is
+  tested under **Manage, Assign an agent** (which makes that agent open the
+  repository first): the usual shortcut that lets the first agent onto a
+  repository nobody was assigned to does not apply to these.
+- **Editing through the server.** The edit page offers **the server** when it
+  can open the repository, and preselects it when no agent is assigned. It
+  moves an SFTP repository (one rename on the storage server) and tests any
+  kind, with the same checks as through an agent: the same repository must open
+  at the new place, or the data is moved back. It is never chosen for you. A
+  filesystem repository is moved through an agent, because the server only sees
+  it through a mapped path that the edit does not change.
+- Not covered: deleting a job together with its snapshots when its agent is
+  down (delete the snapshots one by one through the server first).
 
 #### Maintenance
 

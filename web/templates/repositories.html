@@ -106,8 +106,8 @@
   {{if .Measuring}}<div id="live" data-ids="repo-table" data-every="3000" hidden></div>{{end}}
 
   <h2>Add a repository</h2>
-  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its first assigned agent. The SFTP path and S3 prefix start as <span class="mono">&lt;agent-id&gt;-backup</span> so unrelated data never shares a directory; change it if you want a different layout. Only the fields for the selected kind are used.</p>
-  {{if not .Agents}}<div class="card"><div class="empty">Register and approve an agent first.</div></div>{{else}}
+  <p class="hint">The chosen agent creates the repository (or connects to one already at that location) and becomes its first assigned agent. Choosing <strong>the server</strong> is for storage only the server can reach: the server creates it with its own engine, maintains it, and no agent is assigned until you assign one under Manage (which makes that agent open it first); an SFTP key path is then a path inside the server container, and a filesystem repository needs its path on the server. The SFTP path and S3 prefix start as <span class="mono">&lt;agent-id&gt;-backup</span> so unrelated data never shares a directory; change it if you want a different layout. Only the fields for the selected kind are used.</p>
+  {{if and (not .Agents) (not .ServerEngine)}}<div class="card"><div class="empty">Register and approve an agent first.</div></div>{{else}}
   <div class="card">
     <form class="grid" method="post" action="/repositories">
       <label>Name <input name="name" value="{{.Form.Get "name"}}" required></label>
@@ -119,7 +119,7 @@
         </select>
       </label>
       <label>Initialize on agent
-        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+        <select name="agent">{{$sel := .Form.Get "agent"}}{{range .Agents}}<option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}>{{.Name}}</option>{{end}}{{if .ServerEngine}}<option value="server" {{if eq "server" $sel}}selected{{end}}>the server (storage only it can reach)</option>{{end}}</select>
       </label>
       <label>Repository password <input name="password" type="password" autocomplete="new-password" placeholder="leave blank to generate one"></label>
       <label class="check wide"><input type="checkbox" name="ecc" {{if .Form.Get "ecc"}}checked{{end}}> Reed-Solomon error correction (bitrot protection, ~2% overhead; can't be added later)</label>

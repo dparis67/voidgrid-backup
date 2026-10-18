@@ -23,6 +23,18 @@ func serverOnlyRepo(t *testing.T) (*Controller, catalog.Job, catalog.Repository,
 	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status == catalog.RunFailed {
 		t.Fatalf("backup: %+v %v", run, err)
 	}
+	// The first backup of a job whose list was never checked starts a refresh
+	// in the background. Let it finish before the agent's path is broken, or
+	// it would run through the server and race the end of the test.
+	for i := 0; ; i++ {
+		if _, ok := c.SnapshotsSynced(ctx, job.ID); ok {
+			break
+		}
+		if i > 400 {
+			t.Fatal("the background snapshot refresh never finished")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 	eng, err := engine.New(t.TempDir(), EngineHost)
 	if err != nil {
 		t.Fatal(err)

@@ -20,6 +20,15 @@
       <label class="wide">Directory on the agent host <input class="mono" name="fs_path" value="{{if .Form.Get "fs_path"}}{{.Form.Get "fs_path"}}{{else}}{{.Repo.Config.Filesystem.Path}}{{end}}" required></label>
       <p class="hint wide"><strong>A new directory moves the repository's data</strong> there (a rename on the same filesystem), tests it, and only then saves. If the test fails the data is moved back.</p>
       {{end}}
+      {{if or .ServerOK .NoAgent}}
+      <label class="wide">Open, test and move it through
+        <select name="on">
+          <option value="" {{if and (not .NoAgent) (ne (.Form.Get "on") "server")}}selected{{end}}>an agent that uses it</option>
+          {{if .ServerOK}}<option value="server" {{if or .NoAgent (eq (.Form.Get "on") "server")}}selected{{end}}>the server</option>{{end}}
+        </select>
+      </label>
+      <p class="hint wide">The server only does it when you choose it: for storage no agent can reach. It needs the SFTP key at the repository's key path inside the server container, and it moves only SFTP repositories (a filesystem directory is moved through an agent).{{if .NoAgent}} No agent is assigned to this repository, so the server is selected.{{end}}</p>
+      {{end}}
       <div class="actions row"><button type="submit">Save</button> <a href="/repositories">Cancel</a></div>
     </form>
   </div>

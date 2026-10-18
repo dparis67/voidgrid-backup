@@ -392,6 +392,8 @@ type repositoriesPage struct {
 	Form      url.Values
 	Generated string // shown exactly once, right after creation
 	Created   string
+	// ServerEngine: the server has its own engine, so it can create a repository.
+	ServerEngine bool
 }
 
 func (u *ui) repositories(w http.ResponseWriter, r *http.Request) {
@@ -400,6 +402,7 @@ func (u *ui) repositories(w http.ResponseWriter, r *http.Request) {
 
 func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int, p repositoriesPage) {
 	ctx := r.Context()
+	p.ServerEngine = u.c.Engine != nil
 	repos, err := u.c.Catalog.ListRepositories(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -509,11 +512,16 @@ func (u *ui) addRepository(w http.ResponseWriter, r *http.Request) {
 		u.renderRepositories(w, r, http.StatusBadRequest, p)
 		return
 	}
+	note := ""
+	if f.Get("agent") == ServerHost {
+		note = " The server created it and maintains it. No agent is assigned yet: assign one under Manage, Assign an agent, before adding a job."
+	}
 	if generated == "" {
-		redirectNotice(w, r, "/repositories", "Created repository "+created.Name+".")
+		redirectNotice(w, r, "/repositories", "Created repository "+created.Name+"."+note)
 		return
 	}
 	p.Generated, p.Created = generated, created.Name
+	p.Notice = strings.TrimSpace(note)
 	u.renderRepositories(w, r, http.StatusOK, p)
 }
 

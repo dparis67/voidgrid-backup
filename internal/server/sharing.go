@@ -97,7 +97,7 @@ func (c *Controller) checkAssigned(ctx context.Context, repoID, agentID string) 
 	if err != nil {
 		return err
 	}
-	if len(assigned) == 0 {
+	if len(assigned) == 0 && !c.serverCreated(ctx, repoID) {
 		return c.Catalog.AssignAgent(ctx, repoID, agentID)
 	}
 	if !slices.Contains(assigned, agentID) {
@@ -118,7 +118,7 @@ func (c *Controller) ReposFor(ctx context.Context, agentID string) ([]catalog.Re
 		if err != nil {
 			return nil, err
 		}
-		if len(assigned) == 0 || slices.Contains(assigned, agentID) {
+		if (len(assigned) == 0 && !c.serverCreated(ctx, r.ID)) || slices.Contains(assigned, agentID) {
 			out = append(out, r)
 		}
 	}
