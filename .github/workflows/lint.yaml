@@ -1,0 +1,20 @@
+name: lint
+
+# The same lint as the release build (scripts/lint.sh, config .golangci.yml), on
+# every push to main and every pull request, so a finding shows up when it is
+# made and not when a version tag is pushed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint
+        run: scripts/lint.sh
