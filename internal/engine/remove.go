@@ -125,8 +125,13 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 		}
 	}
 
-	// Drop this agent's cached connection(s) to it.
+	// Drop this agent's cached connection(s) to it, and its cache when that
+	// lives apart from the connection (a configured cache directory).
 	stale, _ := filepath.Glob(filepath.Join(e.dir, r.ID+"-*"))
+	if e.cache.Dir != "" {
+		apart, _ := filepath.Glob(filepath.Join(e.cache.Dir, r.ID+"-*"))
+		stale = append(stale, apart...)
+	}
 	for _, d := range stale {
 		if err := os.RemoveAll(d); err != nil {
 			slog.Warn("remove local repository cache", "dir", d, "err", err)

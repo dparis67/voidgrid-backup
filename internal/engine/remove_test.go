@@ -90,6 +90,38 @@ func TestWipe(t *testing.T) {
 	}
 }
 
+func TestWipeRemovesACacheKeptApartFromTheConnection(t *testing.T) {
+	ctx := context.Background()
+	e, r, src, _ := removeFixture(t)
+	base := filepath.Join(t.TempDir(), "cache")
+	if err := e.SetCache(CacheConfig{Dir: base, MetadataBytes: 8 << 20, ContentBytes: 4 << 20}); err != nil {
+		t.Fatal(err)
+	}
+	otherCache := filepath.Join(base, "r9-keep")
+	writeFile(t, filepath.Join(otherCache, "x"), "another repository's cache")
+	// removeFixture connected before the cache moved; a fresh connection puts
+	// its cache under base.
+	if err := os.RemoveAll(connDir(e, r)); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := e.Backup(ctx, r, []string{src}, nil, keepOne); err != nil || res[0].Err != nil {
+		t.Fatalf("backup: %+v %v", res, err)
+	}
+	if m, _ := filepath.Glob(filepath.Join(base, "r1-*")); len(m) != 1 {
+		t.Fatalf("expected the cache under %s, got %v", base, m)
+	}
+
+	if _, _, err := e.Wipe(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := filepath.Glob(filepath.Join(base, "r1-*")); len(m) != 0 {
+		t.Fatalf("cache kept apart from the connection not removed: %v", m)
+	}
+	if _, err := os.Stat(otherCache); err != nil {
+		t.Fatalf("another repository's cache must survive: %v", err)
+	}
+}
+
 func TestWipeRefusesWhereThereIsNoRepository(t *testing.T) {
 	e := newEngine(t, "host-a")
 	dir := t.TempDir()
