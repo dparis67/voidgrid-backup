@@ -150,3 +150,27 @@ func TestRecoveryModeSeesAllHosts(t *testing.T) {
 		t.Fatal("recovery mode wrote a snapshot")
 	}
 }
+
+// A backup where nothing changed takes every file from the previous snapshot,
+// and Kopia then records 0 files for it. The test restore must still compare
+// against the whole tree, not that count.
+func TestCheckTestRestoreOfAnUnchangedBackup(t *testing.T) {
+	ctx := context.Background()
+	e, r, _, _ := checkFixture(t, false)
+	snaps, err := e.ListSnapshots(ctx, r, nil)
+	if err != nil || len(snaps) != 1 {
+		t.Fatalf("snapshots: %d %v", len(snaps), err)
+	}
+	src := snaps[0].Path
+	res, err := e.Backup(ctx, r, []string{src}, nil, Retention{Latest: 10})
+	if err != nil || res[0].Err != nil || res[0].CachedFiles != 2 || res[0].Files != 0 {
+		t.Fatalf("the second backup was not an unchanged one: %+v %v", res, err)
+	}
+	check, err := e.Check(ctx, r, CheckOptions{VerifyPercent: 100, TestRestoreMaxBytes: 1 << 30})
+	if err != nil || !check.OK() || check.TestRestoreError != "" {
+		t.Fatalf("check of an unchanged backup: %+v %v", check, err)
+	}
+	if !strings.Contains(check.TestRestore, "2 files") {
+		t.Fatalf("the test restore should name the whole tree: %q", check.TestRestore)
+	}
+}

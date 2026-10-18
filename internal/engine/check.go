@@ -129,18 +129,20 @@ func (e *Engine) testRestore(ctx context.Context, rep repo.Repository, mans []*s
 		}
 	}
 	var pick *snapshot.Manifest
+	var pickSize int64
 	for _, m := range newest {
-		if m.Stats.TotalFileSize > maxBytes {
+		if _, size := recordedTotals(m); size > maxBytes {
 			continue
 		}
-		if pick == nil || m.Stats.TotalFileSize < pick.Stats.TotalFileSize {
-			pick = m
+		if _, size := recordedTotals(m); pick == nil || size < pickSize {
+			pick, pickSize = m, size
 		}
 	}
 	if pick == nil {
 		return "", ""
 	}
-	what = fmt.Sprintf("%s snapshot %s (%d files, %d bytes)", pick.Source.Path, shortManifest(pick), pick.Stats.TotalFileCount, pick.Stats.TotalFileSize)
+	wantFiles, wantBytes := recordedTotals(pick)
+	what = fmt.Sprintf("%s snapshot %s (%d files, %d bytes)", pick.Source.Path, shortManifest(pick), wantFiles, wantBytes)
 
 	scratch := filepath.Join(e.dir, "test-restore-"+strconv.FormatInt(time.Now().UnixNano(), 36))
 	defer tidy.RemoveAll(scratch)
@@ -155,11 +157,22 @@ func (e *Engine) testRestore(ctx context.Context, rep repo.Repository, mans []*s
 	if err != nil {
 		return what, err.Error()
 	}
-	if files != int64(pick.Stats.TotalFileCount) || bytes != pick.Stats.TotalFileSize {
+	if files != wantFiles || bytes != wantBytes {
 		return what, fmt.Sprintf("restored %d files / %d bytes, snapshot recorded %d / %d",
-			files, bytes, pick.Stats.TotalFileCount, pick.Stats.TotalFileSize)
+			files, bytes, wantFiles, wantBytes)
 	}
 	return what, ""
+}
+
+// recordedTotals is the file count and size of everything in the snapshot.
+// The manifest's Stats.TotalFileCount counts only the files this run did not
+// take from the previous snapshot, so it is 0 for a backup where nothing
+// changed; the root directory's summary counts the whole tree.
+func recordedTotals(m *snapshot.Manifest) (files, bytes int64) {
+	if m.RootEntry != nil && m.RootEntry.DirSummary != nil {
+		return m.RootEntry.DirSummary.TotalFileCount, m.RootEntry.DirSummary.TotalFileSize
+	}
+	return int64(m.Stats.TotalFileCount), m.Stats.TotalFileSize
 }
 
 func countFiles(dir string) (files, bytes int64, err error) {
