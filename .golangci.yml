@@ -59,7 +59,11 @@ linters:
         text: "G124"
       # An agent enrolling has no CA to trust yet. Its token carries the hash of
       # the server's certificate, and VerifyConnection rejects any other one, so
-      # the connection is pinned, not unverified. Only this rule, only this file.
+      # the connection is pinned, not unverified. gosec cannot see that check and
+      # flags InsecureSkipVerify. The full explanation is in the comment above
+      # the tls.Config in internal/agent/register.go. Only this rule, only this
+      # file; removing it needs the registration token to carry the server's
+      # certificate, which changes the token format.
       - path: internal/agent/register\.go
         linters: [gosec]
         text: "G402"

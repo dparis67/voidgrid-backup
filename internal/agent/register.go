@@ -93,10 +93,31 @@ func (a *Agent) Register(ctx context.Context, cfg RegisterConfig) error {
 // registerOnce makes one connection: Register if needed, then Poll. done is
 // true once the certificate has been installed.
 func (a *Agent) registerOnce(ctx context.Context, cfg RegisterConfig, tok enroll.Token, registered, rejectedLogged *bool) (done bool, err error) {
+	// This connection is verified, by pinning, not by a certificate authority.
+	//
+	// InsecureSkipVerify is set because Go's normal check cannot apply here: the
+	// server's registration certificate is self-signed and has no name, and an
+	// agent that has not enrolled yet has no CA and no domain to check it against.
+	// What replaces that check is VerifyConnection below. It runs after the
+	// handshake and refuses the connection unless the certificate the server
+	// presented hashes to the pin inside the registration token the operator
+	// copied from the server (see package enroll). A server that does not hold
+	// that exact certificate, so a wrong host or someone in the middle, is
+	// refused. Skipping the standard check with nothing in its place would let
+	// anyone impersonate the server; crypto/tls says InsecureSkipVerify is meant
+	// "only for testing or in combination with VerifyConnection or
+	// VerifyPeerCertificate", and that VerifyConnection runs for every connection,
+	// resumptions included, whatever InsecureSkipVerify says.
+	//
+	// The security linter (gosec G402) flags InsecureSkipVerify and cannot see
+	// VerifyConnection, so .golangci.yml excludes that one finding for this one
+	// file, and for nothing else: do not widen it, and do not remove
+	// VerifyConnection. Once the agent is approved this path is never used again:
+	// it authenticates with the certificate the server issued it.
 	conn, err := grpc.NewClient(cfg.Server, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		Certificates:       []tls.Certificate{a.bootstrap},
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, // see above: VerifyConnection pins the server's certificate instead
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 || !tok.Matches(cs.PeerCertificates[0].Raw) {
 				return errors.New("the server's certificate does not match the token (wrong server, or a token from another install)")
