@@ -62,5 +62,5 @@ docker run --rm -i \
   -e GOPATH=/gopath -e GOCACHE=/tmp/gobuild -e GOFLAGS=-buildvcs=false -e HOME=/tmp \
   -e VB_LIVE_SFTP_HOST="$HETZNER_LINK" -e VB_LIVE_SFTP_PORT="$port" \
   -e VB_LIVE_SFTP_USER="$HETZNER_USER" -e VB_LIVE_SFTP_KEY_FILE="$key" \
-  -e VB_LIVE_SFTP_PASSWORD="${HETZNER_PASSWORD:-}" -e VB_LIVE_SFTP_PATH="$path" \
-  golang:1.27 go test -count=1 -tags sftplive -run "TestLiveSFTP" -v ./internal/engine/
+  -e VB_LIVE_SFTP_PASSWORD="${HETZNER_PASSWORD:-}" -e VB_LIVE_SFTP_PATH="$path" -e VB_LIVE_BENCH="${VB_LIVE_BENCH:-}" -e VB_LIVE_RUN="${VB_LIVE_RUN:-}" \
+  golang:1.27 go test -count=1 -timeout 30m -tags sftplive -run "${VB_LIVE_RUN:-TestLiveSFTP}" -v ./internal/engine/
