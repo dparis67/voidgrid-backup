@@ -8,6 +8,17 @@
     <form method="post" action="/jobs/{{$job.ID}}/check"><button class="plain" type="submit" {{if $job.Running}}disabled{{end}}>Verify repository</button></form>
     {{if not $job.Running}}<a href="/jobs/{{$job.ID}}/edit"><button class="plain" type="button">Edit</button></a>{{end}}
     <form method="post" action="/jobs/{{$job.ID}}/toggle"><button class="plain" type="submit">{{if $job.Enabled}}Disable schedule{{else}}Enable schedule{{end}}</button></form>
+    {{if not $job.Running}}
+    <details class="job-delete" id="delete">
+      <summary>Delete…</summary>
+      <form class="grid" method="post" action="/jobs/{{$job.ID}}/delete">
+        <label>Type <span class="mono">{{$job.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
+        <label class="check wide"><input type="checkbox" name="snapshots" value="1"> Also delete its snapshots ({{len .Snapshots}} listed). This can't be undone: the data is released by the next maintenance cycle.</label>
+        <div class="actions"><button class="danger" type="submit">Delete job and its run history</button>
+          <span class="hint">Unchecked, the snapshots stay in the repository.</span></div>
+      </form>
+    </details>
+    {{end}}
   </div>
 
   <h2>Details</h2>
@@ -89,14 +100,12 @@
   </div>
   </div>
 
-  <h2>Delete job</h2>
-  <div class="card">
-    <form class="grid" method="post" action="/jobs/{{$job.ID}}/delete">
-      <label>Type <span class="mono">{{$job.Name}}</span> to confirm <input name="confirm" autocomplete="off"></label>
-      <label class="check wide"><input type="checkbox" name="snapshots" value="1"> Also delete its snapshots ({{len .Snapshots}} listed). This can't be undone: the data is released by the next maintenance cycle.</label>
-      <div class="actions"><button class="danger" type="submit">Delete job and its run history</button>
-        <span class="hint">Unchecked, the snapshots stay in the repository.</span></div>
-    </form>
-  </div>
+  <script>
+  // The Jobs list links here with #delete: open the fold it points at.
+  (function () {
+    var d = document.getElementById("delete");
+    if (d && location.hash === "#delete") d.open = true;
+  })();
+  </script>
   {{if or $job.Running .SnapBusy}}<div id="live" data-ids="job-head,job-runs,job-snaps" data-every="3000" hidden></div>{{end}}
 {{template "bottom" .}}{{end}}

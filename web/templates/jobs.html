@@ -20,7 +20,8 @@
           <td>{{if .Running}}<span class="running">running</span>{{else if .Last}}<span class="{{.Last.Status}}">{{.Last.Status}}</span> {{ago .Last.StartedAt}}{{else}}<span class="muted">never</span>{{end}}</td>
           <td class="mono">{{if .Running}}<span class="muted">-</span>{{else if .Last}}{{tookRun .Last}}{{else}}<span class="muted">-</span>{{end}}</td>
           <td>{{if .Next.IsZero}}-{{else}}{{when .Next}}{{end}}</td>
-          <td><form method="post" action="/jobs/{{.ID}}/run"><input type="hidden" name="from" value="list">{{if $.Sort}}<input type="hidden" name="sort" value="{{$.Sort}}"><input type="hidden" name="dir" value="{{if $.Desc}}desc{{else}}asc{{end}}">{{end}}<button class="plain" type="submit" {{if .Running}}disabled{{end}}>Run</button></form></td>
+          <td><form method="post" action="/jobs/{{.ID}}/run"><input type="hidden" name="from" value="list">{{if $.Sort}}<input type="hidden" name="sort" value="{{$.Sort}}"><input type="hidden" name="dir" value="{{if $.Desc}}desc{{else}}asc{{end}}">{{end}}<button class="plain" type="submit" {{if .Running}}disabled{{end}}>Run</button></form>
+            {{if not .Running}}<a class="job-delete-link" href="/jobs/{{.ID}}#delete">Delete…</a>{{end}}</td>
         </tr>
       {{end}}
       </tbody>

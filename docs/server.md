@@ -331,7 +331,7 @@ repository. A blank field keeps what is stored, and secrets are never shown.
 
 - **A new path moves the data.** Kopia's blobs are relative to the storage
   path, so the repository is moved with one directory rename on the storage
-  (SFTP, or a filesystem rename on the same filesystem; never S3). The server
+  (SFTP, or a filesystem rename on the same filesystem; never S3, see below). The server
   asks an agent that uses the repository to open it first and remember its
   identity, move it, open it at the new path and confirm it is the same
   repository. Only then is the new path saved. If any step after the move
@@ -348,6 +348,48 @@ repository. A blank field keeps what is stored, and secrets are never shown.
 - Another agent that uses the repository needs nothing: it connects with the
   new settings on its next run. Update the connection details you recorded for
   recovery.
+
+##### Why an S3 repository cannot be moved
+
+The S3 bucket, endpoint and prefix are fixed once a repository is created; only
+the access key and secret can be edited. This is deliberate, not an omission.
+
+- **S3 has no rename.** Moving a prefix means copying every object under it to
+  the new prefix and then deleting the old ones. A repository is thousands of
+  objects (Kopia packs are about 20 MiB each, so 150 GB is on the order of
+  7,500 packs plus index blobs). The SFTP and filesystem moves are one
+  directory rename, a single metadata operation, which is why they are safe to
+  offer in a form.
+- **The copy is not atomic.** An interruption leaves two partial copies, and
+  nothing in the repository says which is complete. A safe move would have to
+  copy, verify every object, switch the settings and only then delete, and be
+  able to resume after a failure.
+- **Deleting does not always free the space.** On a bucket that keeps old
+  versions (Backblaze B2 does by default) deleting the originals only hides
+  them until a lifecycle rule removes them, so a move can double what you pay
+  for until then. Copy and request costs depend on the provider.
+- **A different bucket or endpoint** is a copy to different storage, not a
+  rename.
+
+The prefix is only a name, and the default `<agent-id>-backup` never has to
+change. If you do need a repository at another prefix or bucket:
+
+1. Make sure nothing is running on it.
+2. Copy the objects with the provider's tool or with rclone, or use Kopia's own
+   `kopia repository sync-to`, which copies a repository to another location.
+   Check that every object arrived.
+3. Delete the repository's jobs (their snapshots stay in the repository),
+   **Remove** the repository (its data is not touched), and add it again at the
+   new location with the **same password**: adding connects to a repository
+   that already exists there. Create the jobs again. Run history is lost; the
+   snapshots are not.
+4. Run a backup and a restore from the new location, then delete the old
+   objects.
+
+An in-place S3 move (copy, verify, switch, delete, resumable) could be built
+the same way as the SFTP one. It has not been, and it should be tested against
+a real bucket first, since S3 itself has not yet been exercised against real
+storage here.
 
 #### Maintenance
 
@@ -440,8 +482,9 @@ weekly/monthly/annual):
   [agent.md](agent.md#compose-stacks).
 - **VM job** (agent → VMs): one libvirt domain. See [agent.md](agent.md#virtual-machines).
 
-A job page has "Back up now", "Verify repository", the schedule switch, run
-history and the snapshot list. Deleting a job removes it and its run history;
+A job page has "Back up now", "Verify repository", the schedule switch, a
+collapsed **Delete...** form, run history and the snapshot list (the Jobs list
+links each row to that form). Deleting a job removes it and its run history;
 its snapshots stay in the repository unless you tick **Also delete its
 snapshots**, which forgets every snapshot in the job's list first (and keeps the
 job if that fails). That cannot be undone, and the space is released by the next
