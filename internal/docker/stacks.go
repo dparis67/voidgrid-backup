@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
@@ -133,6 +134,15 @@ func DetectDump(image string) string {
 // which need the app paused (or stopped) for a consistent copy. Files are
 // recognised by their header, not their name, so a ".db" can be either.
 func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) {
+	// Files are opened through the mount's own root: a symlink inside a mount
+	// that points anywhere outside it is refused, so an app or a container cannot
+	// make the agent (which runs as root) read some other file.
+	rt, err := os.OpenRoot(root)
+	if err != nil {
+		slog.Debug("looking for file databases", "root", root, "err", err)
+		return nil, nil
+	}
+	defer tidy.CloseWarn("mount "+root, rt)
 	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
 	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || len(sqlite) >= limit || len(duckdb) >= limit {
@@ -144,9 +154,16 @@ func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) 
 			}
 			return nil
 		}
+		if !d.Type().IsRegular() { // a symlink or a named pipe called x.db is not a database
+			return nil
+		}
 		switch strings.ToLower(filepath.Ext(p)) {
 		case ".db", ".sqlite", ".sqlite3", ".duckdb", ".ddb":
-			switch fileDatabaseKind(p) {
+			rel, err := filepath.Rel(root, p)
+			if err != nil {
+				return nil
+			}
+			switch fileDatabaseKind(rt, rel) {
 			case "sqlite":
 				sqlite = append(sqlite, p)
 			case "duckdb":
@@ -161,14 +178,19 @@ func findFileDatabases(root string, depth, limit int) (sqlite, duckdb []string) 
 	return sqlite, duckdb
 }
 
-// fileDatabaseKind reads the file header: "SQLite format 3\x00" at the start,
-// or DuckDB's "DUCK" magic at offset 8 (after the header checksum).
-func fileDatabaseKind(p string) string {
-	f, err := os.Open(p)
+// fileDatabaseKind reads the file header of rel inside rt: "SQLite format 3\x00"
+// at the start, or DuckDB's "DUCK" magic at offset 8 (after the header
+// checksum). It opens without blocking and checks that what it opened is a
+// regular file, so a named pipe swapped in after the walk cannot stall it.
+func fileDatabaseKind(rt *os.Root, rel string) string {
+	f, err := rt.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return ""
 	}
 	defer tidy.Close(f)
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		return ""
+	}
 	hdr := make([]byte, 16)
 	if n, _ := io.ReadFull(f, hdr); n < len(hdr) {
 		return ""

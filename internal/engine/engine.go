@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"math"
@@ -765,22 +764,6 @@ func storage(ctx context.Context, c repocfg.Config, create bool) (blob.Storage, 
 		return filesystem.New(ctx, &filesystem.Options{Path: c.Filesystem.Path}, create)
 	}
 	return nil, fmt.Errorf("unknown repository kind %q", c.Kind)
-}
-
-func emptyOrMissing(dir string) (bool, error) {
-	f, err := os.Open(dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	defer tidy.Close(f)
-	names, err := f.Readdirnames(1)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false, fmt.Errorf("restore target %s: %w", dir, err)
-	}
-	return len(names) == 0, nil
 }
 
 func optInt(n int) *policy.OptionalInt {

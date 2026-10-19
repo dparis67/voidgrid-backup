@@ -233,20 +233,6 @@ func openRepo(c repoFlags) (*engine.Engine, engine.Repo, func(), error) {
 	return e, engine.Repo{ID: "recovery", Config: cfg, Password: password}, cleanup, nil
 }
 
-func loadPassword(file string) (string, error) {
-	if file != "" {
-		b, err := os.ReadFile(file)
-		if err != nil {
-			return "", fmt.Errorf("read password file: %w", err)
-		}
-		return strings.TrimSpace(string(b)), nil
-	}
-	if p, ok := os.LookupEnv("VB_RECOVER_PASSWORD"); ok {
-		return p, nil
-	}
-	return "", errors.New("no repository password: set -password-file or $VB_RECOVER_PASSWORD")
-}
-
 func runList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	var c repoFlags

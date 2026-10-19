@@ -23,9 +23,6 @@ linters:
       # through internal/tidy, which logs the failure: at warning level for a
       # database, connection, repository, storage or session, at debug level only
       # for a temporary file or a read handle whose result nobody can use.
-    gosec:
-      excludes:
-        - G304 # a backup tool reads paths from its configuration and data directory by design
   exclusions:
     rules:
       # Tests and the fakes they use: an unchecked error there fails the test
@@ -41,6 +38,19 @@ linters:
       - path: internal/webauth/webauth\.go
         linters: [gosec]
         text: "G124"
+      # G304 (opening a path held in a variable) is excused for exactly two
+      # functions, each in a file of its own, because the path is the operator's
+      # own argument and opening it is the feature: the recovery tool's
+      # -password-file, and the restore target directory the operator chose
+      # (checked by guard.RestoreTarget first). Every other file the program
+      # opens is confined to its directory with internal/confined, or is
+      # opened through os.Root.
+      - path: cmd/voidgrid-backup-recover/password\.go
+        linters: [gosec]
+        text: "G304"
+      - path: internal/engine/emptydir\.go
+        linters: [gosec]
+        text: "G304"
       # An agent enrolling has no CA to trust yet. Its token carries the hash of
       # the server's certificate, and VerifyConnection rejects any other one, so
       # the connection is pinned, not unverified. gosec cannot see that check and

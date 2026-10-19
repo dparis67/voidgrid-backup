@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/voidgrid/voidgrid-backup/internal/confined"
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
@@ -291,7 +292,7 @@ func WriteFileAtomic(path string, data []byte, mode fs.FileMode) error {
 }
 
 func readPEM(path, typ string) ([]byte, error) {
-	b, err := os.ReadFile(path)
+	b, err := confined.ReadFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return nil, err
 	}

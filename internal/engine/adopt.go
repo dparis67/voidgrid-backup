@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/kopia/kopia/repo"
+
+	"github.com/voidgrid/voidgrid-backup/internal/confined"
 )
 
 // identityFile, in a connection directory, holds the Kopia unique ID of the
@@ -58,7 +60,7 @@ func (e *Engine) adoptCache(ctx context.Context, r Repo, dir, cfgFile string) {
 		if old == dir {
 			continue
 		}
-		id, err := os.ReadFile(filepath.Join(old, identityFile))
+		id, err := confined.ReadFile(old, identityFile)
 		if err != nil {
 			continue
 		}

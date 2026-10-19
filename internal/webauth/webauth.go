@@ -24,6 +24,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
+	"github.com/voidgrid/voidgrid-backup/internal/confined"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 )
 
@@ -383,7 +384,7 @@ func verifyToken(key []byte, token string) (payload string, ok bool) {
 // <dir>/session.key, creating one on first use.
 func LoadOrCreateSessionKey(dir string) ([]byte, error) {
 	path := filepath.Join(dir, "session.key")
-	b, err := os.ReadFile(path)
+	b, err := confined.ReadFile(dir, "session.key")
 	if err == nil && len(b) == 32 {
 		return b, nil
 	}
