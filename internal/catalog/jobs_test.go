@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestRepositoriesJobsRuns(t *testing.T) {
@@ -16,7 +17,7 @@ func TestRepositoriesJobsRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 	now := time.Now()
 
 	if err := c.AddAgent(ctx, Agent{ID: "a1", Name: "box", Address: "x:1", CertFingerprint: "f", EnrolledAt: now}); err != nil {

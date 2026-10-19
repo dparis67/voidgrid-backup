@@ -18,6 +18,8 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // fakeProvider is a minimal OIDC provider: discovery, JWKS and a token
@@ -47,17 +49,20 @@ func newFakeProvider(t *testing.T) *fakeProvider {
 func (p *fakeProvider) mux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		tidy.Check("fake provider: discovery reply", json.NewEncoder(w).Encode(map[string]any{
 			"issuer": p.baseURL, "authorization_endpoint": p.baseURL + "/authorize",
 			"token_endpoint": p.baseURL + "/token", "jwks_uri": p.baseURL + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"ES256"},
-		})
+		}))
 	})
 	mux.HandleFunc("GET /jwks", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(p.jwks)
+		tidy.Check("fake provider: keys reply", json.NewEncoder(w).Encode(p.jwks))
 	})
 	mux.HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		code := r.FormValue("code")
 		if code == "" || r.FormValue("code_verifier") == "" {
 			http.Error(w, "missing code or PKCE verifier", http.StatusBadRequest)
@@ -99,10 +104,10 @@ func (p *fakeProvider) mux() *http.ServeMux {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		tidy.Check("fake provider: token reply", json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "test-access-token", "token_type": "Bearer",
 			"expires_in": 3600, "id_token": idToken,
-		})
+		}))
 	})
 	return mux
 }

@@ -112,7 +112,7 @@ func TestRollbackIgnoresOnlyAnAlreadyFinishedTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer CloseWarn("db", db)
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatal(err)

@@ -25,6 +25,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/webauth"
 )
 
@@ -46,7 +47,7 @@ func startAgentWithDocker(t *testing.T, dir, dockerSocket string) (*agent.Agent,
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(a.TLSConfig())), grpc.UnaryInterceptor(a.Interceptor))
 	agentpb.RegisterAgentServer(s, a)
-	go s.Serve(lis)
+	go func() { tidy.Check("serve the test agent", s.Serve(lis)) }()
 	t.Cleanup(s.Stop)
 	return a, lis.Addr().String()
 }
@@ -58,7 +59,7 @@ func newController(t *testing.T) *Controller {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cat.Close() })
+	t.Cleanup(func() { tidy.CloseWarn("cat", cat) })
 	ca, err := pki.LoadOrCreateCA(filepath.Join(dir, "pki"))
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +125,7 @@ func anonPing(t *testing.T, addr string) error {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer tidy.CloseWarn("conn", conn)
 	_, err = agentpb.NewAgentClient(conn).Ping(context.Background(), &agentpb.PingRequest{})
 	return err
 }
@@ -157,7 +158,11 @@ func approveTestAgent(t *testing.T, c *Controller, a *agent.Agent, name, addr, r
 	}
 	rctx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
-	go a.Register(rctx, agent.RegisterConfig{Server: regAddr, Token: token, ListenPort: port, PollEvery: 20 * time.Millisecond})
+	go func() {
+		if err := a.Register(rctx, agent.RegisterConfig{Server: regAddr, Token: token, ListenPort: port, PollEvery: 20 * time.Millisecond}); err != nil && rctx.Err() == nil {
+			tidy.Check("register the test agent", err)
+		}
+	}()
 
 	var reg catalog.Registration
 	waitFor(t, "the agent's registration", func() bool {
@@ -248,7 +253,7 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET / = %d", resp.StatusCode)
 	}
@@ -261,7 +266,7 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-site POST = %d, want 403 even while signed in", resp.StatusCode)
 	}
@@ -273,7 +278,7 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("approving an unknown registration = %d, want 400", resp.StatusCode)
 	}
@@ -282,7 +287,7 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "application/json" {
 		t.Fatalf("GET /api/agents = %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}

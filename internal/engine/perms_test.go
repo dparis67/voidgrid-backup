@@ -28,8 +28,14 @@ func TestUnreadableEntriesAreNamed(t *testing.T) {
 	src := t.TempDir()
 	writeFile(t, filepath.Join(src, "ok.txt"), "fine")
 	writeFile(t, filepath.Join(src, "secret", "key"), "x")
-	os.Chmod(filepath.Join(src, "secret"), 0o000)
-	t.Cleanup(func() { os.Chmod(filepath.Join(src, "secret"), 0o755) })
+	if err := os.Chmod(filepath.Join(src, "secret"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(filepath.Join(src, "secret"), 0o755); err != nil {
+			t.Errorf("restore permissions: %v", err)
+		}
+	})
 
 	e := newEngine(t, "h")
 	res, err := e.Backup(ctx, permsRepo(t, e), []string{src}, nil, keepOne)

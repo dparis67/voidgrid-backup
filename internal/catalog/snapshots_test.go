@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestSnapshotRecord(t *testing.T) {
@@ -15,7 +16,7 @@ func TestSnapshotRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 	now := time.Now().Truncate(time.Second)
 	if err := c.AddAgent(ctx, Agent{ID: "a1", Name: "box", Address: "x:1", CertFingerprint: "f", EnrolledAt: now}); err != nil {
 		t.Fatal(err)

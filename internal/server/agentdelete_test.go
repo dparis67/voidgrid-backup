@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // postStatus posts a form the way the UI does and returns the status, the
@@ -25,7 +26,7 @@ func postStatus(t *testing.T, client *http.Client, u string, form url.Values) (i
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer tidy.Close(resp.Body)
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, resp.Header.Get("Location"), string(b)
 }

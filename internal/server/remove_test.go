@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // hasFormatBlob reports whether dir still holds a Kopia repository (its
@@ -180,7 +181,7 @@ func TestRemovalsNeedTheTypedName(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer tidy.Close(resp.Body)
 		return resp.Request.URL.Query().Get("notice")
 	}
 
@@ -283,7 +284,7 @@ func TestDefaultRepositoryAndDeleteFormsOnThePages(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer tidy.Close(resp.Body)
 		b, _ := io.ReadAll(resp.Body)
 		return string(b)
 	}
@@ -296,7 +297,7 @@ func TestDefaultRepositoryAndDeleteFormsOnThePages(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer tidy.Close(resp.Body)
 		return resp.Request.URL.Query().Get("notice")
 	}
 

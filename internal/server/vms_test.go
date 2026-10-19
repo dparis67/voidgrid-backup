@@ -19,7 +19,9 @@ func TestVMJobEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	disk := filepath.Join(dir, "ha.qcow2")
-	os.WriteFile(disk, []byte("QFI\xfb original"), 0o644)
+	if err := os.WriteFile(disk, []byte("QFI\xfb original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	hv := &virttest.Fake{
 		DomainXML: "<domain><name>ha</name></domain>",
 		Dom: &virt.Domain{Name: "ha", UUID: "u", State: virt.StateRunning, Disks: []virt.Disk{
@@ -74,7 +76,9 @@ func TestVMJobEndToEnd(t *testing.T) {
 	get(t, client, srv.URL+"/jobs/"+job.ID+"/snapshots/"+snaps[0].ID, "Restore the VM")
 
 	// Running VM: in-place restore fails and is recorded as a failed run.
-	os.WriteFile(disk, []byte("damaged"), 0o644)
+	if err := os.WriteFile(disk, []byte("damaged"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if rr, _ := c.RestoreVM(ctx, job.ID, "", snaps[0].ID, "", false); rr.Status != catalog.RunFailed || !strings.Contains(rr.Error, "shut down") {
 		t.Fatalf("restore over a running VM: %+v", rr)
 	}

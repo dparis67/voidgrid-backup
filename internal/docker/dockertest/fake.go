@@ -5,6 +5,7 @@ package dockertest
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,7 +17,14 @@ import (
 	"testing"
 
 	"github.com/voidgrid/voidgrid-backup/internal/docker"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
+
+// Say writes a fake command's output; a failed write is reported, not dropped.
+func Say(w io.Writer, s string) {
+	_, err := io.WriteString(w, s)
+	tidy.Check("fake docker: command output", err)
+}
 
 // ExecFunc plays the command. It returns the exit code.
 type ExecFunc func(container string, cmd []string, stdin io.Reader, stdout, stderr io.Writer) int
@@ -47,7 +55,7 @@ func New(t *testing.T, containers ...docker.Container) *Fake {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { tidy.RemoveAll(dir) })
 	f := &Fake{Socket: filepath.Join(dir, "docker.sock"), containers: containers, execs: map[string]*execState{}}
 	lis, err := net.Listen("unix", f.Socket)
 	if err != nil {
@@ -59,8 +67,12 @@ func New(t *testing.T, containers ...docker.Container) *Fake {
 	mux.HandleFunc("POST /exec/{id}/start", f.start)
 	mux.HandleFunc("GET /exec/{id}/json", f.inspect)
 	srv := &http.Server{Handler: mux}
-	go srv.Serve(lis)
-	t.Cleanup(func() { srv.Close() })
+	go func() {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			tidy.Check("fake docker: serve", err)
+		}
+	}()
+	t.Cleanup(func() { tidy.CloseWarn("srv", srv) })
 	return f
 }
 
@@ -86,7 +98,7 @@ func (f *Fake) State(id string) string {
 func (f *Fake) list(w http.ResponseWriter, _ *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	json.NewEncoder(w).Encode(f.containers)
+	tidy.Check("fake docker: container list reply", json.NewEncoder(w).Encode(f.containers))
 }
 
 func (f *Fake) action(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +120,7 @@ func (f *Fake) action(w http.ResponseWriter, r *http.Request) {
 			Cmd         []string
 			AttachStdin bool
 		}
-		json.NewDecoder(r.Body).Decode(&body)
+		tidy.Check("fake docker: decode the exec request", json.NewDecoder(r.Body).Decode(&body))
 		if f.containers[idx].State != "running" {
 			f.mu.Unlock()
 			http.Error(w, `{"message":"container is not running"}`, http.StatusConflict)
@@ -119,7 +131,7 @@ func (f *Fake) action(w http.ResponseWriter, r *http.Request) {
 		f.execs[eid] = &execState{container: id, cmd: body.Cmd, stdin: body.AttachStdin}
 		f.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"Id": eid})
+		tidy.Check("fake docker: exec id reply", json.NewEncoder(w).Encode(map[string]string{"Id": eid}))
 		return
 	}
 	defer f.mu.Unlock()
@@ -164,14 +176,18 @@ func (f *Fake) start(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	io.Copy(io.Discard, r.Body) // Docker consumes the start options before upgrading
+	if _, err := io.Copy(io.Discard, r.Body); err != nil { // Docker consumes the start options before upgrading
+		tidy.Check("fake docker: read the start options", err)
+	}
 	conn, rw, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return
 	}
-	defer conn.Close()
-	rw.WriteString("HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
-	rw.Flush()
+	defer tidy.CloseWarn("conn", conn)
+	if _, err := rw.WriteString("HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"); err != nil {
+		tidy.Check("fake docker: write the upgrade reply", err)
+	}
+	tidy.Check("fake docker: flush the upgrade reply", rw.Flush())
 
 	var mu sync.Mutex
 	frame := func(stream byte) io.Writer {
@@ -208,7 +224,7 @@ func (f *Fake) inspect(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]any{"Running": ex.running, "ExitCode": ex.exit})
+	tidy.Check("fake docker: exec state reply", json.NewEncoder(w).Encode(map[string]any{"Running": ex.running, "ExitCode": ex.exit}))
 }
 
 type writerFunc func([]byte) (int, error)

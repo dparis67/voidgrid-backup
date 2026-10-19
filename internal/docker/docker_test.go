@@ -10,6 +10,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/docker"
 	"github.com/voidgrid/voidgrid-backup/internal/docker/dockertest"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestExecStreamsAndReportsExit(t *testing.T) {
@@ -18,17 +19,18 @@ func TestExecStreamsAndReportsExit(t *testing.T) {
 	fake.Exec = func(_ string, cmd []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		switch cmd[0] {
 		case "cat":
-			io.Copy(stdout, stdin)
+			_, err := io.Copy(stdout, stdin)
+			tidy.Check("fake exec: copy stdin", err)
 			return 0
 		case "big":
 			chunk := strings.Repeat("x", 64<<10)
 			for i := 0; i < 32; i++ { // 2 MiB across many frames
-				io.WriteString(stdout, chunk)
+				dockertest.Say(stdout, chunk)
 			}
 			return 0
 		default:
-			io.WriteString(stdout, "partial")
-			io.WriteString(stderr, "boom: permission denied")
+			dockertest.Say(stdout, "partial")
+			dockertest.Say(stderr, "boom: permission denied")
 			return 3
 		}
 	}
@@ -39,21 +41,21 @@ func TestExecStreamsAndReportsExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := io.ReadAll(rc)
-	rc.Close()
+	tidy.CloseWarn("rc", rc)
 	if err != nil || string(out) != "round trip through stdin" {
 		t.Fatalf("cat: %q %v", out, err)
 	}
 
 	rc, _ = c.Exec(ctx, "db", []string{"big"}, nil, nil)
 	out, err = io.ReadAll(rc)
-	rc.Close()
+	tidy.CloseWarn("rc", rc)
 	if err != nil || len(out) != 2<<20 {
 		t.Fatalf("big: %d bytes, %v", len(out), err)
 	}
 
 	rc, _ = c.Exec(ctx, "db", []string{"fail"}, nil, nil)
 	out, err = io.ReadAll(rc)
-	rc.Close()
+	tidy.CloseWarn("rc", rc)
 	if err == nil || !strings.Contains(err.Error(), "exited with 3") || !strings.Contains(err.Error(), "permission denied") {
 		t.Fatalf("failing command: %q %v", out, err)
 	}
@@ -83,11 +85,21 @@ func TestExecStreamsAndReportsExit(t *testing.T) {
 
 func TestStacks(t *testing.T) {
 	data := t.TempDir()
-	os.WriteFile(filepath.Join(data, "app.db"), []byte("SQLite format 3\x00rest"), 0o644)
-	os.WriteFile(filepath.Join(data, "fake.db"), []byte("not a database at all"), 0o644)
-	os.WriteFile(filepath.Join(data, "olap.duckdb"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644)
-	os.WriteFile(filepath.Join(data, "renamed.db"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644)
-	os.WriteFile(filepath.Join(data, "short.duckdb"), []byte("DUCK"), 0o644)
+	if err := os.WriteFile(filepath.Join(data, "app.db"), []byte("SQLite format 3\x00rest"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "fake.db"), []byte("not a database at all"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "olap.duckdb"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "renamed.db"), append([]byte("12345678DUCK"), make([]byte, 16)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "short.duckdb"), []byte("DUCK"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	fake := dockertest.New(t,
 		dockertest.ComposeContainer("a1", "notes", "/srv/notes", "app", "ghcr.io/x/notes:latest", "running", dockertest.Bind(data, "/data")),
 		dockertest.ComposeContainer("d1", "notes", "/srv/notes", "db", "docker.io/library/postgres:16-alpine", "running"),

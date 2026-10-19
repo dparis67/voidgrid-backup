@@ -15,6 +15,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/notify"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // setupJob enrolls a local agent, creates a filesystem repository through
@@ -42,9 +43,15 @@ func setupJob(t *testing.T) (*Controller, catalog.Job, string) {
 	}
 
 	src := t.TempDir()
-	os.MkdirAll(filepath.Join(src, "docs"), 0o755)
-	os.WriteFile(filepath.Join(src, "docs", "note.txt"), []byte("hello"), 0o644)
-	os.WriteFile(filepath.Join(src, "junk.tmp"), []byte("x"), 0o644)
+	if err := os.MkdirAll(filepath.Join(src, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "docs", "note.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "junk.tmp"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	job, err := c.AddJob(ctx, JobInput{
 		Name: "docs", AgentID: ag.ID, RepositoryID: repo.ID,
@@ -220,7 +227,9 @@ func TestNextRun(t *testing.T) {
 		t.Fatalf("first run: %v %v", next, err)
 	}
 	id, _ := c.Catalog.StartRun(ctx, job.ID, "backup", "schedule", time.Date(2026, 1, 2, 3, 0, 5, 0, time.Local))
-	c.Catalog.FinishRun(ctx, catalog.Run{ID: id, Status: catalog.RunSuccess, FinishedAt: time.Now()})
+	if err := c.Catalog.FinishRun(ctx, catalog.Run{ID: id, Status: catalog.RunSuccess, FinishedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
 	next, err = NextRun(ctx, c.Catalog, job)
 	if err != nil || !next.Equal(time.Date(2026, 1, 3, 3, 0, 0, 0, time.Local)) {
 		t.Fatalf("after a run: %v %v", next, err)
@@ -265,7 +274,7 @@ func TestPagesRender(t *testing.T) {
 			t.Fatal(err)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		tidy.Close(resp.Body)
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("GET %s = %d: %s", p, resp.StatusCode, body)
 		}
@@ -277,7 +286,7 @@ func TestPagesRender(t *testing.T) {
 	// The repository password never leaves the server through the API.
 	resp, _ := client.Get(srv.URL + "/api/repositories")
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	repo, _ := c.Catalog.Repository(ctx, job.RepositoryID)
 	if strings.Contains(string(body), repo.Password) || strings.Contains(string(body), "password") {
 		t.Fatalf("/api/repositories leaks the password: %s", body)
@@ -293,7 +302,7 @@ func TestPagesRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ = io.ReadAll(resp.Body)
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if !strings.Contains(string(body), "never allowed") {
 		t.Fatalf("restore to / was not refused: %d", resp.StatusCode)
 	}

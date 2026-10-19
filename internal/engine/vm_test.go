@@ -139,7 +139,9 @@ func TestVMBackupShutoffAndRestore(t *testing.T) {
 
 	// Domain gone: disks restored and the domain re-defined.
 	hv.Dom = nil
-	os.Remove(disk)
+	if err := os.Remove(disk); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.RestoreVM(ctx, r, hv, res.SnapshotID, "", true); err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -88,7 +89,7 @@ func TestRunFromListKeepsSort(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		tidy.Close(resp.Body)
 		if loc := resp.Header.Get("Location"); !strings.HasPrefix(loc, f.want) {
 			t.Errorf("%v redirected to %q, want prefix %q", f.form, loc, f.want)
 		}
@@ -135,7 +136,7 @@ func TestSetScheduleFromList(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		tidy.Close(resp.Body)
 		return resp.Header.Get("Location")
 	}
 	if loc := post(url.Values{"schedule": {"nonsense"}, "from": {"list"}, "sort": {"next"}, "dir": {"asc"}}); !strings.HasPrefix(loc, "/jobs?dir=asc&sort=next&notice=Schedule+not+saved") {

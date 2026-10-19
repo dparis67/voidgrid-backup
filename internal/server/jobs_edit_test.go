@@ -90,11 +90,19 @@ func TestUpdateJob(t *testing.T) {
 func TestEditStackJobAddsMount(t *testing.T) {
 	ctx := context.Background()
 	workdir := filepath.Join(t.TempDir(), "notes")
-	os.MkdirAll(workdir, 0o755)
-	os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("services: {}"), 0o644)
+	if err := os.MkdirAll(workdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("services: {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	extra := filepath.Join(t.TempDir(), "uploads")
-	os.MkdirAll(extra, 0o755)
-	os.WriteFile(filepath.Join(extra, "a.txt"), []byte("hello"), 0o644)
+	if err := os.MkdirAll(extra, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extra, "a.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	fake := dockertest.New(t,
 		dockertest.ComposeContainer("app1", "notes", workdir, "app", "notes:1", "running",

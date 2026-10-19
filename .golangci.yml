@@ -25,12 +25,17 @@ linters:
       # for a temporary file or a read handle whose result nobody can use.
   exclusions:
     rules:
-      # Tests and the fakes they use: an unchecked error there fails the test
-      # anyway, and gosec's rules are about production code.
+      # gosec is excused in tests and in the fakes they use, and errcheck is not:
+      # a failed setup call or close there must fail the test or be reported. What
+      # gosec finds in that code is about code that only runs under `go test`:
+      # the permissions of fixtures in temporary directories (G301, G302, G306),
+      # reading a test's own file (G304), cookies built by hand (G124), a test
+      # client that skips verifying a self-signed test server (G402), and an
+      # HTTP server in a fake with no header timeout (G112).
       - path: _test\.go
-        linters: [errcheck, gosec]
+        linters: [gosec]
       - path: internal/(docker/dockertest|virt/virttest)/
-        linters: [errcheck, gosec]
+        linters: [gosec]
       # The session and login-state cookies are HttpOnly and SameSite=Lax always,
       # and Secure whenever the request came over HTTPS (directly or through the
       # operator's reverse proxy). A literal Secure: true would break the UI over

@@ -47,17 +47,17 @@ func newStackFixture(t *testing.T) *stackFixture {
 		script := strings.Join(cmd, " ")
 		switch {
 		case strings.Contains(script, "pg_dumpall"):
-			io.WriteString(stdout, "-- PostgreSQL database cluster dump\nCREATE ROLE app;\n")
+			dockertest.Say(stdout, "-- PostgreSQL database cluster dump\nCREATE ROLE app;\n")
 			return 0
 		case strings.Contains(script, "psql"):
 			b, _ := io.ReadAll(stdin)
 			f.mu.Lock()
 			f.imported.Write(b)
 			f.mu.Unlock()
-			io.WriteString(stdout, "CREATE ROLE")
+			dockertest.Say(stdout, "CREATE ROLE")
 			return 0
 		}
-		io.WriteString(stderr, "unexpected command")
+		dockertest.Say(stderr, "unexpected command")
 		return 127
 	}
 	f.dk = docker.New(f.fake.Socket)
@@ -173,8 +173,8 @@ func TestStackDumpFailureIsReported(t *testing.T) {
 	ctx := context.Background()
 	f := newStackFixture(t)
 	f.fake.Exec = func(_ string, _ []string, _ io.Reader, stdout, stderr io.Writer) int {
-		io.WriteString(stdout, "-- truncated")
-		io.WriteString(stderr, "pg_dumpall: error: connection failed")
+		dockertest.Say(stdout, "-- truncated")
+		dockertest.Say(stderr, "pg_dumpall: error: connection failed")
 		return 1
 	}
 	res, err := f.e.BackupStack(ctx, f.r, f.dk, f.spec(), keepOne)

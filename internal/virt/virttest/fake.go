@@ -75,7 +75,9 @@ func (f *Fake) BlockCommit(_ context.Context, _, disk string) error {
 	}
 	if !f.KeepOverlay {
 		for _, p := range f.Overlays {
-			os.Remove(p)
+			if err := os.Remove(p); err != nil {
+				return err
+			}
 		}
 	}
 	f.OnOverlay = false

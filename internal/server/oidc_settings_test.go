@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/webauth"
 )
 
@@ -49,7 +50,7 @@ func TestInitialSetupConfiguresOIDC(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("setup with OIDC fields: status %d", resp.StatusCode)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 
 	// Took effect immediately: no restart, no rebuilding NewHandler.
 	if !c.Auth().OIDCEnabled() {
@@ -68,7 +69,7 @@ func TestInitialSetupConfiguresOIDC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer body.Body.Close()
+	defer tidy.Close(body.Body)
 	if body.StatusCode != http.StatusOK {
 		t.Fatalf("GET /auth/login: status %d", body.StatusCode)
 	}

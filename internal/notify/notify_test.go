@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func testEvent() Event {
@@ -35,7 +37,9 @@ func TestSendNotifarr(t *testing.T) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("content-type: %s", r.Header.Get("Content-Type"))
 		}
-		json.NewDecoder(r.Body).Decode(&gotBody)
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode the request body: %v", err)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -81,7 +85,9 @@ func TestSendNotifarrHTTPError(t *testing.T) {
 func TestSendDiscord(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&gotBody)
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode the request body: %v", err)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -121,16 +127,19 @@ func startFakeSMTP(t *testing.T, withAuth bool) (addr string, got *fakeSMTP) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { lis.Close() })
+	t.Cleanup(func() { tidy.CloseWarn("lis", lis) })
 	got = &fakeSMTP{}
 	go func() {
 		conn, err := lis.Accept()
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer tidy.CloseWarn("conn", conn)
 		r := bufio.NewReader(conn)
-		reply := func(s string) { conn.Write([]byte(s + "\r\n")) }
+		reply := func(s string) {
+			_, err := conn.Write([]byte(s + "\r\n"))
+			tidy.Check("fake smtp reply", err)
+		}
 		reply("220 fake.smtp ready")
 		for {
 			line, err := r.ReadString('\n')

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 var planOpts = planOptions{WindowStart: 0, WindowEnd: 7 * 60, RepoCap: 2, Buffer: 10 * time.Minute}
@@ -176,7 +177,7 @@ func TestSuggestAndPlanThroughThePages(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	var sug struct {
 		Schedule, Text string
 		Clash          bool

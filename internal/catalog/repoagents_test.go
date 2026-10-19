@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // An install from before assignments existed gets a row for every agent that
@@ -50,13 +52,13 @@ func TestRepositoryAgentsBackfill(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	db.Close()
+	tidy.CloseWarn("db", db)
 
 	c, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 	got, err := c.RepositoryAgents(ctx, "r1")
 	if err != nil || len(got) != 2 || !slices.Contains(got, "a1") || !slices.Contains(got, "a2") {
 		t.Fatalf("backfilled agents of r1: %v %v", got, err)

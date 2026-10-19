@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestAgentsAndReopen(t *testing.T) {
@@ -30,7 +32,7 @@ func TestAgentsAndReopen(t *testing.T) {
 	if err := c.RecordFailure(ctx, "nope", "x"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("RecordFailure on unknown agent: %v", err)
 	}
-	c.Close()
+	tidy.CloseWarn("c", c)
 
 	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("catalog mode: %v %v", fi.Mode(), err)
@@ -41,7 +43,7 @@ func TestAgentsAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 	got, err := c.AgentByName(ctx, "box")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +75,7 @@ func TestSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 
 	if v, err := c.GetSetting(ctx, "notify"); err != nil || v != "" {
 		t.Fatalf("unset setting: %q %v", v, err)
@@ -95,7 +97,7 @@ func TestRegistrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 
 	now := time.Now()
 	r, err := c.RegisterAgent(ctx, Registration{ID: "r1", Fingerprint: "f1", AgentCert: []byte("cert"),
@@ -159,7 +161,7 @@ func TestRenameAndReplaceAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer tidy.CloseWarn("c", c)
 	if err := c.AddAgent(ctx, Agent{ID: "a1", Name: "box", Address: "10.0.0.5:9443", CertFingerprint: "old", EnrolledAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}

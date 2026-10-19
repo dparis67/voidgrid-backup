@@ -13,6 +13,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // day is the default window: 24 hours from the start of the current hour.
@@ -139,7 +140,7 @@ func TestMoveScheduleEndpoint(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer tidy.Close(resp.Body)
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, strings.TrimSpace(string(b))
 	}

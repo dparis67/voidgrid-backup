@@ -20,7 +20,9 @@ func checkFixture(t *testing.T, ecc bool) (*Engine, Repo, string, string) {
 	src := t.TempDir()
 	blob := make([]byte, 256<<10)
 	rand.Read(blob)
-	os.WriteFile(filepath.Join(src, "random.bin"), blob, 0o644)
+	if err := os.WriteFile(filepath.Join(src, "random.bin"), blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	writeFile(t, filepath.Join(src, "small.txt"), "hello")
 	repoDir := filepath.Join(t.TempDir(), "repo")
 	e := newEngine(t, "host-a")
@@ -40,7 +42,7 @@ func checkFixture(t *testing.T, ecc bool) (*Engine, Repo, string, string) {
 func damagePacks(t *testing.T, repoDir string) int {
 	t.Helper()
 	n := 0
-	filepath.WalkDir(repoDir, func(p string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(repoDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -56,13 +58,17 @@ func damagePacks(t *testing.T, repoDir string) int {
 		for i := 0; i < 4; i++ {
 			b[len(b)/2+i*97] ^= 0xff
 		}
-		os.Chmod(p, 0o644)
+		if err := os.Chmod(p, 0o644); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(p, b, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		n++
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if n == 0 {
 		t.Fatal("no pack blobs found to damage")
 	}

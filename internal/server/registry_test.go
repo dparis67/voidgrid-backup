@@ -22,6 +22,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // startRegistry serves c's registration listener on loopback and returns its
@@ -34,7 +35,12 @@ func startRegistry(t *testing.T, c *Controller) string {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { c.ServeRegistry(ctx, lis); close(done) }()
+	go func() {
+		if err := c.ServeRegistry(ctx, lis); err != nil && ctx.Err() == nil {
+			tidy.Check("serve the registry", err)
+		}
+		close(done)
+	}()
 	t.Cleanup(func() { cancel(); <-done })
 	return lis.Addr().String()
 }
@@ -78,7 +84,7 @@ func newTestAgent(t *testing.T, addr, token string) *testAgent {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { tidy.CloseWarn("conn", conn) })
 	return &testAgent{key: key, cert: cert, reg: agentpb.NewRegistryClient(conn)}
 }
 

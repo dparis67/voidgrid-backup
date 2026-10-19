@@ -12,6 +12,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 	"github.com/voidgrid/voidgrid-backup/internal/sftptest"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -163,7 +164,7 @@ func TestMaintenanceOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, err := maintenance.GetParams(ctx, rep)
-	rep.Close(ctx)
+	tidy.CloseCtx(ctx, "repository", rep)
 	if err != nil || p.Owner != Username+"@host-a" {
 		t.Fatalf("maintenance owner = %q, %v", p.Owner, err)
 	}

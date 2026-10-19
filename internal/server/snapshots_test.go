@@ -22,6 +22,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // startStoppableAgent is startAgent with a way to take the agent down.
@@ -37,7 +38,7 @@ func startStoppableAgent(t *testing.T, dir string) (*agent.Agent, string, func()
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(a.TLSConfig())), grpc.UnaryInterceptor(a.Interceptor))
 	agentpb.RegisterAgentServer(s, a)
-	go s.Serve(lis)
+	go func() { tidy.Check("serve the test agent", s.Serve(lis)) }()
 	t.Cleanup(s.Stop)
 	return a, lis.Addr().String(), s.Stop
 }
@@ -76,7 +77,9 @@ func TestSnapshotIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := t.TempDir()
-	os.WriteFile(filepath.Join(src, "a.txt"), []byte("one"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	job, err := c.AddJob(ctx, JobInput{Name: "docs", AgentID: ag.ID, RepositoryID: repo.ID,
 		Paths: []string{src}, Keep: catalog.Retention{Latest: 1}})
 	if err != nil {
@@ -102,7 +105,9 @@ func TestSnapshotIndex(t *testing.T) {
 	}
 
 	// Retention keeps one: the pruned snapshot leaves the record without a reconcile.
-	os.WriteFile(filepath.Join(src, "a.txt"), []byte("two!"), 0o644)
+	if err := os.WriteFile(filepath.Join(src, "a.txt"), []byte("two!"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if run, err := c.RunJob(ctx, job.ID, "manual"); err != nil || run.Status != catalog.RunSuccess {
 		t.Fatalf("second backup: %+v %v", run, err)
 	}
@@ -161,8 +166,12 @@ func TestOldAgentResultReconciles(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitSynced(t, c, job.ID)
-	c.Catalog.SetSetting(ctx, snapshotsSyncedKey(job.ID), "") // pretend nothing was reconciled yet
-	c.Catalog.ReplaceSnapshots(ctx, job.ID, nil)
+	if err := c.Catalog.SetSetting(ctx, snapshotsSyncedKey(job.ID), ""); err != nil { // pretend nothing was reconciled yet
+		t.Fatal(err)
+	}
+	if err := c.Catalog.ReplaceSnapshots(ctx, job.ID, nil); err != nil {
+		t.Fatal(err)
+	}
 	c.recordSnapshots(ctx, job, []*agentpb.PathResult{{Path: job.Paths[0], SnapshotId: "whatever"}})
 	waitSynced(t, c, job.ID)
 	if got, _ := c.Snapshots(ctx, job.ID); len(got) != 1 {
@@ -213,7 +222,9 @@ func TestBrowseCache(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	b.do(k, fetch) // and a later one is served from the cache
+	if _, err := b.do(k, fetch); err != nil { // and a later one is served from the cache
+		t.Fatal(err)
+	}
 	if calls.Load() != 1 {
 		t.Fatalf("fetch ran %d times, want 1", calls.Load())
 	}
@@ -232,13 +243,17 @@ func TestBrowseCache(t *testing.T) {
 
 	// Size is bounded and the oldest entries go first.
 	for i := 0; i < browseCacheEntries+5; i++ {
-		b.do(browseKey{"r", "s", fmt.Sprint(i)}, fetch)
+		if _, err := b.do(browseKey{"r", "s", fmt.Sprint(i)}, fetch); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if n := len(b.data); n != browseCacheEntries {
 		t.Fatalf("cache holds %d listings, want %d", n, browseCacheEntries)
 	}
 	before := calls.Load()
-	b.do(browseKey{"r", "s", "0"}, fetch) // evicted, so fetched again
+	if _, err := b.do(browseKey{"r", "s", "0"}, fetch); err != nil { // evicted, so fetched again
+		t.Fatal(err)
+	}
 	if calls.Load() != before+1 {
 		t.Fatal("evicted entry was served from the cache")
 	}

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/webauth"
 )
 
@@ -25,10 +26,10 @@ func (f *fakeIssuer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]any{
+	tidy.Check("fake issuer: discovery reply", json.NewEncoder(w).Encode(map[string]any{
 		"issuer": f.baseURL, "authorization_endpoint": f.baseURL + "/authorize",
 		"token_endpoint": f.baseURL + "/token", "jwks_uri": f.baseURL + "/jwks",
-	})
+	}))
 }
 
 // newAuthController is newController plus OIDC login wired to a fake
@@ -126,7 +127,7 @@ func TestSetupWizardAndRecoveryLogin(t *testing.T) {
 		t.Fatalf("correct setup token: status %d", resp.StatusCode)
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	codes := recoveryCodeLine.FindAllStringSubmatch(string(bodyBytes), -1)
 	if len(codes) != 10 {
 		t.Fatalf("expected 10 recovery codes in the response, got %d: %q", len(codes), bodyBytes)

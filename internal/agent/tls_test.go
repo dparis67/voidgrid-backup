@@ -16,6 +16,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 // clientCert issues a client certificate from ca with the given common name.
@@ -64,7 +65,7 @@ func TestOnlyTheServerIdentityIsAccepted(t *testing.T) {
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(a.TLSConfig())), grpc.UnaryInterceptor(a.Interceptor))
 	agentpb.RegisterAgentServer(s, a)
-	go s.Serve(lis)
+	go func() { tidy.Check("serve the test agent", s.Serve(lis)) }()
 	t.Cleanup(s.Stop)
 
 	ping := func(cert tls.Certificate) error {
@@ -77,7 +78,7 @@ func TestOnlyTheServerIdentityIsAccepted(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer conn.Close()
+		defer tidy.CloseWarn("conn", conn)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, err = agentpb.NewAgentClient(conn).Ping(ctx, &agentpb.PingRequest{})

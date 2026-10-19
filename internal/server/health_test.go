@@ -9,6 +9,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/agent"
 	"github.com/voidgrid/voidgrid-backup/internal/health"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestHealth(t *testing.T) {
@@ -18,7 +19,7 @@ func TestHealth(t *testing.T) {
 	// /healthz is exempt from both setup and sign-in, so the plain default
 	// client is enough here.
 	get(t, http.DefaultClient, srv.URL+"/healthz", "ok")
-	c.Catalog.Close()
+	tidy.CloseWarn("Catalog", c.Catalog)
 	if resp, err := http.Get(srv.URL + "/healthz"); err != nil || resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("healthz with a closed catalog: %v %v", resp, err)
 	}
@@ -31,8 +32,10 @@ func TestHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	var st agent.HealthStatus
-	json.NewDecoder(resp.Body).Decode(&st)
-	resp.Body.Close()
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		t.Fatal(err)
+	}
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK || !st.Healthy || st.Enrolled || st.Docker != "disabled" {
 		t.Fatalf("agent health: %d %+v", resp.StatusCode, st)
 	}

@@ -18,14 +18,21 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/docker/dockertest"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func TestStackJobEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	workdir := filepath.Join(t.TempDir(), "notes")
-	os.MkdirAll(filepath.Join(workdir, "pgdata"), 0o755)
-	os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("services: {}"), 0o644)
-	os.WriteFile(filepath.Join(workdir, "pgdata", "PG_VERSION"), []byte("16"), 0o644)
+	if err := os.MkdirAll(filepath.Join(workdir, "pgdata"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("services: {}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, "pgdata", "PG_VERSION"), []byte("16"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	var mu sync.Mutex
 	var imported string
@@ -40,7 +47,7 @@ func TestStackJobEndToEnd(t *testing.T) {
 		script := strings.Join(cmd, " ")
 		switch {
 		case strings.Contains(script, "pg_dumpall"):
-			io.WriteString(stdout, "CREATE TABLE notes();\n")
+			dockertest.Say(stdout, "CREATE TABLE notes();\n")
 		case strings.Contains(script, "psql"):
 			b, _ := io.ReadAll(stdin)
 			mu.Lock()
@@ -110,7 +117,9 @@ func TestStackJobEndToEnd(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workdir, "config"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(workdir, "config", "app.toml"), []byte("x"), 0o644)
+	if err := os.WriteFile(filepath.Join(workdir, "config", "app.toml"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	run, err := c.RunJob(ctx, job.ID, "manual")
 	if err != nil || run.Status != catalog.RunSuccess {
@@ -141,7 +150,9 @@ func TestStackJobEndToEnd(t *testing.T) {
 		t.Fatalf("unconfirmed in-place restore ran: %+v", runs)
 	}
 
-	os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("broken"), 0o644)
+	if err := os.WriteFile(filepath.Join(workdir, "docker-compose.yaml"), []byte("broken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	rr, err := c.RestoreStack(ctx, job.ID, "", snaps[0].ID, "", true)
 	if err != nil || !restoreOK(rr) {
 		t.Fatalf("stack restore: %+v %v", rr, err)
@@ -198,7 +209,7 @@ func get(t *testing.T, client *http.Client, u, want string) string {
 		t.Fatal(err)
 	}
 	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(b), want) {
 		t.Fatalf("GET %s = %d, missing %q:\n%s", u, resp.StatusCode, want, b)
 	}
@@ -215,6 +226,6 @@ func post(t *testing.T, client *http.Client, u string, form url.Values) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	tidy.Close(resp.Body)
 	time.Sleep(10 * time.Millisecond)
 }
