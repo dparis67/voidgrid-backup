@@ -16,7 +16,7 @@ func (a *Agent) Check(ctx context.Context, req *agentpb.CheckRequest) (*agentpb.
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
 	logStarted("check started", r.ID, "verify_percent", req.GetVerifyPercent())
-	res, err := a.engine.Check(ctx, r, engine.CheckOptions{
+	res, err := a.engine.Check(engine.WithNetworkRetry(ctx), r, engine.CheckOptions{
 		VerifyPercent:       req.GetVerifyPercent(),
 		TestRestoreMaxBytes: req.GetTestRestoreMaxBytes(),
 	})

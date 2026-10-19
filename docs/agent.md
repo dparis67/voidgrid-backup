@@ -121,6 +121,22 @@ the agent refuses an in-place restore to them up front and the UI marks them
 agent one writable directory for that (`RESTORE_DIR` in the example). Mount a
 path read-write only if you want in-place restores of it.
 
+## When the network fails
+
+A scheduled or manual backup, a maintenance cycle and a repository check open
+the repository first. If that fails with a network error that may pass (a DNS
+lookup that fails, an unreachable network or host, a refused or reset
+connection, a timeout), the agent does not fail the run at once. It waits 15
+seconds and tries again, doubling the wait each time up to 5 minutes, until it
+has waited 15 minutes in all; only then does the run fail, with the last error.
+Each wait is logged as `network error, trying again`. A login that is refused, a
+wrong key or a missing path is not retried. The wait comes before anything is
+paused or snapshotted, so a stack keeps running and a VM stays off its overlay
+while the agent waits. Actions you start by hand to change things, such as
+adding a repository or testing access, are not retried, so a typo in a host name
+is reported straight away. The server does the same when it runs maintenance
+itself.
+
 ## SFTP key naming
 
 An SFTP repository stores one key file **path**, and that path is read

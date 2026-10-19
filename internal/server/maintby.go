@@ -253,7 +253,7 @@ func (c *Controller) runServerMaintenance(ctx context.Context, repo catalog.Repo
 	}
 	ctx, cancel := context.WithTimeout(ctx, maintTimeout)
 	defer cancel()
-	ran, owner, err := c.Engine.Maintain(ctx, er)
+	ran, owner, err := c.Engine.Maintain(engine.WithNetworkRetry(ctx), er)
 	if err != nil {
 		return "server", err
 	}

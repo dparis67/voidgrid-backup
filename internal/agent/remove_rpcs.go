@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
 )
@@ -55,7 +56,7 @@ func (a *Agent) Maintain(ctx context.Context, req *agentpb.MaintainRequest) (*ag
 	defer a.opMu.Unlock()
 	queued := time.Since(waiting)
 	logStarted("maintenance started", r.ID)
-	ran, owner, err := a.engine.Maintain(ctx, r)
+	ran, owner, err := a.engine.Maintain(engine.WithNetworkRetry(ctx), r)
 	if err != nil {
 		return nil, err
 	}

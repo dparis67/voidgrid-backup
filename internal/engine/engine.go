@@ -702,9 +702,23 @@ func (e *Engine) snapshotEntry(ctx context.Context, rep repo.Repository, snapsho
 	return entry, nil
 }
 
-// open connects on first use (writing a Kopia config under the engine dir,
-// keyed by repository ID and config fingerprint) and opens the repository.
+// open opens the repository (see openOnce). When ctx comes from
+// WithNetworkRetry it waits and tries again if the network fails.
 func (e *Engine) open(ctx context.Context, r Repo) (repo.Repository, error) {
+	if ctx.Value(retryKey{}) == nil {
+		return e.openOnce(ctx, r)
+	}
+	var rep repo.Repository
+	err := retryTransient(ctx, "open repository "+r.ID, func() (err error) {
+		rep, err = e.openOnce(ctx, r)
+		return err
+	})
+	return rep, err
+}
+
+// openOnce connects on first use (writing a Kopia config under the engine dir,
+// keyed by repository ID and config fingerprint) and opens the repository.
+func (e *Engine) openOnce(ctx context.Context, r Repo) (repo.Repository, error) {
 	if err := r.Config.Validate(); err != nil {
 		return nil, err
 	}

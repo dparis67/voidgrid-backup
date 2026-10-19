@@ -62,7 +62,7 @@ func (a *Agent) Backup(ctx context.Context, req *agentpb.BackupRequest) (*agentp
 	a.opMu.Lock()
 	defer a.opMu.Unlock()
 	queued := time.Since(waiting)
-	resp, err := a.runBackup(ctx, r, req, keep)
+	resp, err := a.runBackup(engine.WithNetworkRetry(ctx), r, req, keep)
 	if resp != nil {
 		resp.QueuedMs = queued.Milliseconds()
 	}
