@@ -7,7 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/kopia/kopia/repo"
 	"github.com/kopia/kopia/repo/blob"
@@ -124,21 +125,32 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 	}); err != nil {
 		return 0, 0, fmt.Errorf("list blobs: %w", err)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		return all[j].BlobID == format.KopiaRepositoryBlobID && all[i].BlobID != format.KopiaRepositoryBlobID
+	// The format blob goes last, once every other blob is gone.
+	var formatBlobs []blob.Metadata
+	rest := all[:0:0]
+	for _, bm := range all {
+		if bm.BlobID == format.KopiaRepositoryBlobID {
+			formatBlobs = append(formatBlobs, bm)
+		} else {
+			rest = append(rest, bm)
+		}
+	}
+	var deleted, size atomic.Int64
+	err = deleteBlobs(ctx, st, rest, wipeWorkers, func(bm blob.Metadata) {
+		size.Add(bm.Length)
+		if n := deleted.Add(1); n%1000 == 0 {
+			slog.Info("repository wipe progress", "repo", r.ID, "deleted", n, "of", len(all))
+		}
 	})
-	for i, bm := range all {
-		if err := ctx.Err(); err != nil {
-			return blobs, bytes, err
-		}
-		if err := st.DeleteBlob(ctx, bm.BlobID); err != nil && !errors.Is(err, blob.ErrBlobNotFound) {
-			return blobs, bytes, fmt.Errorf("delete %s after %d of %d blobs: %w", bm.BlobID, i, len(all), err)
-		}
-		blobs++
-		bytes += bm.Length
-		if blobs%1000 == 0 {
-			slog.Info("repository wipe progress", "repo", r.ID, "deleted", blobs, "of", len(all))
-		}
+	if err == nil {
+		err = deleteBlobs(ctx, st, formatBlobs, 1, func(bm blob.Metadata) {
+			size.Add(bm.Length)
+			deleted.Add(1)
+		})
+	}
+	blobs, bytes = deleted.Load(), size.Load()
+	if err != nil {
+		return blobs, bytes, fmt.Errorf("delete blobs after %d of %d: %w", blobs, len(all), err)
 	}
 
 	// Drop this agent's cached connection(s) to it, and its cache when that
@@ -154,6 +166,59 @@ func (e *Engine) Wipe(ctx context.Context, r Repo) (blobs, bytes int64, err erro
 		}
 	}
 	return blobs, bytes, nil
+}
+
+// wipeWorkers is how many blobs a wipe deletes at once. Each delete is a round
+// trip, so a serial wipe over SFTP is bound by latency; a Storage Box allows
+// about ten sessions, and Kopia's SFTP store shares one connection between
+// requests, so a handful of workers speeds it up without hitting the limit.
+const wipeWorkers = 8
+
+// deleteBlobs deletes the blobs with up to workers deleting at once, calling
+// done for each that is gone (one already missing counts). The first failure
+// stops the rest from starting and is returned once running deletes finish.
+func deleteBlobs(ctx context.Context, st blob.Storage, all []blob.Metadata, workers int, done func(blob.Metadata)) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr error
+	)
+	work := make(chan blob.Metadata)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for bm := range work {
+				err := st.DeleteBlob(ctx, bm.BlobID)
+				if err != nil && !errors.Is(err, blob.ErrBlobNotFound) {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("%s: %w", bm.BlobID, err)
+						cancel()
+					}
+					mu.Unlock()
+					continue
+				}
+				done(bm)
+			}
+		}()
+	}
+feed:
+	for _, bm := range all {
+		select {
+		case work <- bm:
+		case <-ctx.Done():
+			break feed
+		}
+	}
+	close(work)
+	wg.Wait()
+	if firstErr != nil {
+		return firstErr
+	}
+	return ctx.Err()
 }
 
 // Maintain runs a full maintenance cycle now. Kopia lets only the repository's

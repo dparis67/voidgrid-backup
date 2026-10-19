@@ -75,7 +75,11 @@ type PathResult struct {
 	// only the others (new or changed, plus streamed entries such as dumps),
 	// while Bytes is the whole source: cached files included.
 	CachedFiles int
-	Timings     Timings
+	// AddedBytes is what the upload wrote to the repository's storage for this
+	// snapshot: new data after deduplication and compression, as Kopia counts
+	// it while uploading (the final index flush is not included).
+	AddedBytes int64
+	Timings    Timings
 }
 
 // Timings says where a backup spent its time. Open and Maintenance cover the
@@ -383,9 +387,9 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 		res.Timings.Prepare = time.Since(sessionStart)
 		var man *snapshot.Manifest
 		uploadStart := time.Now()
+		progress := &upload.CountingUploadProgress{}
 		err = around(func() error {
 			var err error
-			progress := &upload.CountingUploadProgress{}
 			stop := logProgress(si.Path, progress)
 			defer stop()
 			defer e.trackUpload(si.Path, progress)()
@@ -411,6 +415,7 @@ func (e *Engine) takeSnapshot(ctx context.Context, rep repo.Repository, si snaps
 		res.Bytes = man.Stats.TotalFileSize
 		res.Files = int(man.Stats.TotalFileCount)
 		res.CachedFiles = int(man.Stats.CachedFiles)
+		res.AddedBytes = progress.Snapshot().TotalUploadedBytes
 		res.Errors = int(man.Stats.ErrorCount)
 		res.Start, res.End = man.StartTime.ToTime().Unix(), man.EndTime.ToTime().Unix()
 		res.Incomplete = man.IncompleteReason

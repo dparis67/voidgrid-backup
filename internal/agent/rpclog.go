@@ -65,7 +65,7 @@ func logBackupResult(res *agentpb.PathResult, repo, took string) {
 		slog.Warn("backup failed", "repo", repo, "path", res.GetPath(), "took", took, "err", e)
 	} else {
 		slog.Info("backup finished", "repo", repo, "path", res.GetPath(), "snapshot", res.GetSnapshotId(),
-			"changed_files", res.GetFiles(), "cached_files", res.GetCachedFiles(), "total_bytes", res.GetBytes(),
+			"changed_files", res.GetFiles(), "cached_files", res.GetCachedFiles(), "total_bytes", res.GetBytes(), "added_bytes", res.GetAddedBytes(),
 			"unreadable", res.GetErrors(), "pruned", res.GetPruned(), "incomplete", res.GetIncomplete(),
 			"open", ms(t.GetOpenMs()), "prepare", ms(t.GetPrepareMs()), "upload", ms(t.GetUploadMs()),
 			"retention", ms(t.GetRetentionMs()), "save", ms(t.GetSaveMs()), "flush", ms(t.GetFlushMs()), "close", ms(t.GetCloseMs()), "maintenance", ms(t.GetMaintenanceMs()),

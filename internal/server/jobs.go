@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
@@ -369,7 +371,7 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 	stopProgress()
 	run.FinishedAt = time.Now()
 	if err != nil {
-		run.Status, run.Error = catalog.RunFailed, err.Error()
+		run.Status, run.Error = catalog.RunFailed, runError(err)
 	} else {
 		run.Queued = time.Duration(resp.GetQueuedMs()) * time.Millisecond
 		summarizeBackup(&run, resp.GetResults())
@@ -412,6 +414,7 @@ func (c *Controller) notifyOnFailure(ctx context.Context, jobName string, run ca
 
 func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 	var failed, pruned, fileErrs int
+	var added int64
 	var errs []string
 	var tm agentpb.PhaseTimings
 	for _, r := range results {
@@ -431,6 +434,7 @@ func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 			continue
 		}
 		run.Bytes += r.GetBytes()
+		added += r.GetAddedBytes()
 		run.Files += int(r.GetFiles())
 		pruned += int(r.GetPruned())
 		if r.GetErrors() > 0 {
@@ -452,8 +456,12 @@ func summarizeBackup(run *catalog.Run, results []*agentpb.PathResult) {
 	}
 	// Files counts what changed since the last snapshot; Bytes is the whole
 	// source, not what this run added to the repository.
-	run.Summary = fmt.Sprintf("%d of %d paths, %d changed files, %s in the source, %d old snapshots pruned%s",
-		len(results)-failed, len(results), run.Files, HumanBytes(run.Bytes), pruned, phaseSummary(&tm))
+	addedText := ""
+	if added > 0 { // 0 from an agent that predates the field
+		addedText = ", " + HumanBytes(added) + " added to the repository"
+	}
+	run.Summary = fmt.Sprintf("%d of %d paths, %d changed files, %s in the source%s, %d old snapshots pruned%s",
+		len(results)-failed, len(results), run.Files, HumanBytes(run.Bytes), addedText, pruned, phaseSummary(&tm))
 	run.Error = strings.Join(errs, "\n")
 }
 
@@ -485,7 +493,7 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 	})
 	run.FinishedAt = time.Now()
 	if err != nil {
-		run.Status, run.Error = catalog.RunFailed, err.Error()
+		run.Status, run.Error = catalog.RunFailed, runError(err)
 	} else {
 		summarizeCheck(&run, resp)
 	}
@@ -631,7 +639,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 	run.FinishedAt = time.Now()
 	what := "/" + strings.Trim(path, "/")
 	if err != nil {
-		run.Status, run.Error = catalog.RunFailed, err.Error()
+		run.Status, run.Error = catalog.RunFailed, runError(err)
 		run.Summary = fmt.Sprintf("restore %s of %s to %s%s", what, shortID(snapshotID), target, onHost(job, agent))
 	} else {
 		run.Status = catalog.RunSuccess
@@ -706,6 +714,16 @@ func withAgent[T any](c *Controller, a catalog.Agent, timeout time.Duration, cal
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return call(ctx, agentpb.NewAgentClient(conn))
+}
+
+// runError is err as a run records it. A connection the agent dropped while
+// the run was in progress means the agent stopped or restarted, which the raw
+// gRPC text does not say.
+func runError(err error) string {
+	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
+		return "the agent stopped or lost its connection during the run (agent restarted?): " + err.Error()
+	}
+	return err.Error()
 }
 
 // toProtoRepo is the repository as agent agentID is sent it.

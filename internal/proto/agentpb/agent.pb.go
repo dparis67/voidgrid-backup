@@ -373,7 +373,9 @@ type PathResult struct {
 	Timings *PhaseTimings `protobuf:"bytes,13,opt,name=timings,proto3" json:"timings,omitempty"`
 	// Files the snapshot took unchanged from the previous one. "files" counts
 	// only the others, and "bytes" is the whole source, cached files included.
-	CachedFiles   int32 `protobuf:"varint,14,opt,name=cached_files,json=cachedFiles,proto3" json:"cached_files,omitempty"`
+	CachedFiles int32 `protobuf:"varint,14,opt,name=cached_files,json=cachedFiles,proto3" json:"cached_files,omitempty"`
+	// What the upload wrote to storage for this snapshot (0 from an older agent).
+	AddedBytes    int64 `protobuf:"varint,15,opt,name=added_bytes,json=addedBytes,proto3" json:"added_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -502,6 +504,13 @@ func (x *PathResult) GetTimings() *PhaseTimings {
 func (x *PathResult) GetCachedFiles() int32 {
 	if x != nil {
 		return x.CachedFiles
+	}
+	return 0
+}
+
+func (x *PathResult) GetAddedBytes() int64 {
+	if x != nil {
+		return x.AddedBytes
 	}
 	return 0
 }
@@ -3758,7 +3767,7 @@ const file_agent_proto_rawDesc = "" +
 	"\bexcludes\x18\x03 \x03(\tR\bexcludes\x12@\n" +
 	"\tretention\x18\x04 \x01(\v2\".voidgridbackup.agent.v1.RetentionR\tretention\x128\n" +
 	"\x05stack\x18\x05 \x01(\v2\".voidgridbackup.agent.v1.StackSpecR\x05stack\x12/\n" +
-	"\x02vm\x18\x06 \x01(\v2\x1f.voidgridbackup.agent.v1.VMSpecR\x02vm\"\xac\x03\n" +
+	"\x02vm\x18\x06 \x01(\v2\x1f.voidgridbackup.agent.v1.VMSpecR\x02vm\"\xcd\x03\n" +
 	"\n" +
 	"PathResult\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
@@ -3780,7 +3789,9 @@ const file_agent_proto_rawDesc = "" +
 	"\n" +
 	"pruned_ids\x18\f \x03(\tR\tprunedIds\x12?\n" +
 	"\atimings\x18\r \x01(\v2%.voidgridbackup.agent.v1.PhaseTimingsR\atimings\x12!\n" +
-	"\fcached_files\x18\x0e \x01(\x05R\vcachedFiles\"\x99\x02\n" +
+	"\fcached_files\x18\x0e \x01(\x05R\vcachedFiles\x12\x1f\n" +
+	"\vadded_bytes\x18\x0f \x01(\x03R\n" +
+	"addedBytes\"\x99\x02\n" +
 	"\fPhaseTimings\x12\x17\n" +
 	"\aopen_ms\x18\x01 \x01(\x03R\x06openMs\x12\x1d\n" +
 	"\n" +

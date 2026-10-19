@@ -163,7 +163,7 @@ func (c *Controller) jobOp(ctx context.Context, jobID, onID string, inPlace bool
 	run.FinishedAt = time.Now()
 	switch {
 	case err != nil:
-		run.Status, run.Error = catalog.RunFailed, err.Error()
+		run.Status, run.Error = catalog.RunFailed, runError(err)
 	case run.Error != "": // the op reported warnings
 		run.Status = catalog.RunPartial
 	default:

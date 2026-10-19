@@ -103,6 +103,7 @@ func toPathResult(res engine.PathResult) *agentpb.PathResult {
 		Incomplete:  res.Incomplete,
 		PrunedIds:   res.PrunedIDs,
 		CachedFiles: safeint.Int32(res.CachedFiles),
+		AddedBytes:  res.AddedBytes,
 		Timings: &agentpb.PhaseTimings{
 			OpenMs:        res.Timings.Open.Milliseconds(),
 			PrepareMs:     res.Timings.Prepare.Milliseconds(),
