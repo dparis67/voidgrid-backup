@@ -483,9 +483,10 @@ func (u *ui) refreshRepoStats(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/repositories", "Already measuring "+rp.Name+".")
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the measurement outlives the request
 	go func() {
 		defer u.c.inflight.done(repoMeasureKey(id))
-		if _, err := u.c.RefreshRepoStats(context.Background(), id); err != nil {
+		if _, err := u.c.RefreshRepoStats(ctx, id); err != nil {
 			slog.Error("repository stats", "repository", id, "err", err)
 		}
 	}()
@@ -838,16 +839,18 @@ func (u *ui) runJob(w http.ResponseWriter, r *http.Request) {
 		if u.c.IsRunning(repoMaintRunKey(job.RepositoryID)) {
 			notice = "Backup started. Maintenance of its repository is already running, so it isn't started again."
 		}
+		ctx := context.WithoutCancel(r.Context()) // the backup outlives the request
 		go func() {
-			if _, err := u.c.RunJobThenMaintain(context.Background(), id, "manual"); err != nil && !errors.Is(err, ErrRunning) {
+			if _, err := u.c.RunJobThenMaintain(ctx, id, "manual"); err != nil && !errors.Is(err, ErrRunning) {
 				slog.Error("manual backup with maintenance", "job", id, "err", err)
 			}
 		}()
 		redirectNotice(w, r, back, notice)
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the backup outlives the request
 	go func() {
-		if _, err := u.c.RunJob(context.Background(), id, "manual"); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RunJob(ctx, id, "manual"); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("manual backup", "job", id, "err", err)
 		}
 	}()
@@ -864,8 +867,9 @@ func (u *ui) checkJob(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/jobs/"+id, ErrRunning.Error())
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the check outlives the request
 	go func() {
-		if _, err := u.c.RunCheck(context.Background(), id); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RunCheck(ctx, id); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("manual check", "job", id, "err", err)
 		}
 	}()
@@ -1002,8 +1006,9 @@ func (u *ui) restore(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, back, ErrRunning.Error())
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the restore outlives the request
 	go func() {
-		if _, err := u.c.Restore(context.Background(), id, on, sid, rel, target, overwrite); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.Restore(ctx, id, on, sid, rel, target, overwrite); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore", "job", id, "err", err)
 		}
 	}()

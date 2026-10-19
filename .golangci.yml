@@ -25,7 +25,6 @@ linters:
       # for a temporary file or a read handle whose result nobody can use.
     gosec:
       excludes:
-        - G118 # jobs started from a request run on a background context on purpose: they outlive the request
         - G304 # a backup tool reads paths from its configuration and data directory by design
   exclusions:
     rules:

@@ -210,8 +210,9 @@ func (u *ui) restoreStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stop := r.FormValue("stop") != ""
+	ctx := context.WithoutCancel(r.Context()) // the restore outlives the request
 	go func() {
-		if _, err := u.c.RestoreStack(context.Background(), id, on, sid, target, stop); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RestoreStack(ctx, id, on, sid, target, stop); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore stack", "job", id, "err", err)
 		}
 	}()
@@ -229,8 +230,9 @@ func (u *ui) importDump(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/jobs/"+id+"/snapshots/"+sid, ErrRunning.Error())
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the import outlives the request
 	go func() {
-		if _, err := u.c.ImportDump(context.Background(), id, sid, svc); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.ImportDump(ctx, id, sid, svc); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("import dump", "job", id, "err", err)
 		}
 	}()

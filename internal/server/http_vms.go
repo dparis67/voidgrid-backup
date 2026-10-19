@@ -115,8 +115,9 @@ func (u *ui) restoreVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	define := r.FormValue("define") != ""
+	ctx := context.WithoutCancel(r.Context()) // the restore outlives the request
 	go func() {
-		if _, err := u.c.RestoreVM(context.Background(), id, on, sid, target, define); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.RestoreVM(ctx, id, on, sid, target, define); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("restore VM", "job", id, "err", err)
 		}
 	}()

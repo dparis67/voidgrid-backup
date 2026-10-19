@@ -147,7 +147,7 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	// Find out in the background whether the server can open it too, so the
 	// Repositories page can warn when it cannot.
 	if c.Engine != nil && c.ServerCanOpen(r) == nil {
-		go c.checkServer(context.Background(), r)
+		go c.checkServer(context.WithoutCancel(ctx), r) // outlives this call
 	}
 	return r, generated, nil
 }

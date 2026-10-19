@@ -88,8 +88,9 @@ func (u *ui) maintainRepository(w http.ResponseWriter, r *http.Request) {
 		redirectNotice(w, r, "/repositories", "Maintenance of "+rp.Name+" is already running, or the repository is being wiped.")
 		return
 	}
+	ctx := context.WithoutCancel(r.Context()) // the maintenance outlives the request
 	go func() {
-		if _, err := u.c.MaintainRepository(context.Background(), id); err != nil && !errors.Is(err, ErrRunning) {
+		if _, err := u.c.MaintainRepository(ctx, id); err != nil && !errors.Is(err, ErrRunning) {
 			slog.Error("manual maintenance", "repo", id, "err", err)
 		}
 	}()

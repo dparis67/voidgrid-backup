@@ -109,7 +109,7 @@ func (c *Controller) StartWipe(ctx context.Context, repoID, agentID string) erro
 	}
 	go func() {
 		defer c.inflight.done(repoWipeKey(repoID))
-		bg := context.Background()
+		bg := context.WithoutCancel(ctx) // the wipe outlives the request that asked for it
 		slog.Warn("repository wipe requested", "repo", repo.ID, "name", repo.Name, "agent", agent.Name)
 		resp, err := runOn(c, agent, repo, wipeTimeout, func(ctx context.Context, er engine.Repo) (*agentpb.WipeRepositoryResponse, error) {
 			blobs, bytes, err := c.Engine.Wipe(ctx, er)

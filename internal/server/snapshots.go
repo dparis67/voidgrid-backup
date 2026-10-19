@@ -121,8 +121,9 @@ func (c *Controller) recordSnapshots(ctx context.Context, job catalog.Job, resul
 		reconcile = true
 	}
 	if reconcile {
+		bgctx := context.WithoutCancel(ctx) // the refresh outlives the backup call that asked for it
 		go func() {
-			if err := c.RefreshSnapshots(context.Background(), job.ID); err != nil {
+			if err := c.RefreshSnapshots(bgctx, job.ID); err != nil {
 				slog.Error("reconcile snapshots", "job", job.Name, "err", err)
 			}
 		}()
