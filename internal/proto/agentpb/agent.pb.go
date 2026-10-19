@@ -1129,10 +1129,17 @@ type RestoreResponse struct {
 	Files   int32                  `protobuf:"varint,2,opt,name=files,proto3" json:"files,omitempty"`
 	Dirs    int32                  `protobuf:"varint,3,opt,name=dirs,proto3" json:"dirs,omitempty"`
 	Skipped int32                  `protobuf:"varint,4,opt,name=skipped,proto3" json:"skipped,omitempty"`
-	// Restored, but something needs attention (e.g. ownership not restored).
-	Warnings      []string `protobuf:"bytes,5,rep,name=warnings,proto3" json:"warnings,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Restored, but something needs attention (a file that could not be written).
+	Warnings []string `protobuf:"bytes,5,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	// Who the restored files belong to when the process doing the restore is not
+	// allowed to give files to anyone else (not root, no CAP_CHOWN/CAP_FOWNER):
+	// the ownership from the backup was not restored, the files belong to
+	// as_uid:as_gid. Not a warning: the files themselves are complete.
+	OwnershipSkipped bool  `protobuf:"varint,6,opt,name=ownership_skipped,json=ownershipSkipped,proto3" json:"ownership_skipped,omitempty"`
+	AsUid            int32 `protobuf:"varint,7,opt,name=as_uid,json=asUid,proto3" json:"as_uid,omitempty"`
+	AsGid            int32 `protobuf:"varint,8,opt,name=as_gid,json=asGid,proto3" json:"as_gid,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RestoreResponse) Reset() {
@@ -1198,6 +1205,27 @@ func (x *RestoreResponse) GetWarnings() []string {
 		return x.Warnings
 	}
 	return nil
+}
+
+func (x *RestoreResponse) GetOwnershipSkipped() bool {
+	if x != nil {
+		return x.OwnershipSkipped
+	}
+	return false
+}
+
+func (x *RestoreResponse) GetAsUid() int32 {
+	if x != nil {
+		return x.AsUid
+	}
+	return 0
+}
+
+func (x *RestoreResponse) GetAsGid() int32 {
+	if x != nil {
+		return x.AsGid
+	}
+	return 0
 }
 
 type PingRequest struct {
@@ -3809,13 +3837,16 @@ const file_agent_proto_rawDesc = "" +
 	"snapshotId\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x16\n" +
 	"\x06target\x18\x04 \x01(\tR\x06target\x12\x1c\n" +
-	"\toverwrite\x18\x05 \x01(\bR\toverwrite\"\x87\x01\n" +
+	"\toverwrite\x18\x05 \x01(\bR\toverwrite\"\xe2\x01\n" +
 	"\x0fRestoreResponse\x12\x14\n" +
 	"\x05bytes\x18\x01 \x01(\x03R\x05bytes\x12\x14\n" +
 	"\x05files\x18\x02 \x01(\x05R\x05files\x12\x12\n" +
 	"\x04dirs\x18\x03 \x01(\x05R\x04dirs\x12\x18\n" +
 	"\askipped\x18\x04 \x01(\x05R\askipped\x12\x1a\n" +
-	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"\r\n" +
+	"\bwarnings\x18\x05 \x03(\tR\bwarnings\x12+\n" +
+	"\x11ownership_skipped\x18\x06 \x01(\bR\x10ownershipSkipped\x12\x15\n" +
+	"\x06as_uid\x18\a \x01(\x05R\x05asUid\x12\x15\n" +
+	"\x06as_gid\x18\b \x01(\x05R\x05asGid\"\r\n" +
 	"\vPingRequest\"\xc1\x01\n" +
 	"\fPingResponse\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +

@@ -639,7 +639,7 @@ func (c *Controller) Restore(ctx context.Context, jobID, onID, snapshotID, path,
 			run.Status, run.Error = catalog.RunPartial, strings.Join(w, "\n")
 		}
 		run.Bytes, run.Files = resp.GetBytes(), int(resp.GetFiles())
-		run.Summary = fmt.Sprintf("restored %s of %s to %s%s: %d files, %s", what, shortID(snapshotID), target, onHost(job, agent), run.Files, HumanBytes(run.Bytes))
+		run.Summary = withOwnershipNote(fmt.Sprintf("restored %s of %s to %s%s: %d files, %s", what, shortID(snapshotID), target, onHost(job, agent), run.Files, HumanBytes(run.Bytes)), resp, agent.Name)
 	}
 	if ferr := c.Catalog.FinishRun(context.WithoutCancel(ctx), run); ferr != nil {
 		slog.Error("record run", "job", jobID, "err", ferr)

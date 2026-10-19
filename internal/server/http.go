@@ -936,6 +936,9 @@ type browsePage struct {
 	Agents     []catalog.Agent
 	On         string // agent ID the page browses and restores on; "" is the job's own
 	ServerWhy  string // why the server cannot be chosen under "Restore on"; "" when it can
+	// RestoreNote warns that files restored on the chosen host will not get
+	// their original owners (it does not run as root); "" when they will.
+	RestoreNote string
 }
 
 func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
@@ -965,6 +968,11 @@ func (u *ui) browse(w http.ResponseWriter, r *http.Request) {
 	if on := r.URL.Query().Get("on"); on != j.AgentID {
 		p.On = on
 	}
+	host := p.On
+	if host == "" {
+		host = j.AgentID
+	}
+	p.RestoreNote = u.c.restoreHostNote(ctx, host)
 	if p.Entries, err = u.c.Browse(ctx, j.ID, p.On, sid, rel); err != nil {
 		p.Error = err.Error()
 	}

@@ -98,7 +98,7 @@ The agent checks itself and says what's missing instead of failing quietly:
 
 - **Agents page**: a warning when it lacks any of the capabilities above.
 - **Backups**: a partial run names the first unreadable files.
-- **Restores**: a partial run says when ownership could not be restored.
+- **Restores**: when the agent cannot restore ownership, the run is still a success. Its summary says "complete, files belong to uid:gid N:N (… does not run as root, so the ownership in the backup was not restored)", and the snapshot page says so before you choose that agent. Only a file that could not be written makes a restore partial.
 
 ## Paths and read-only mounts
 

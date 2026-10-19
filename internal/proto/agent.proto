@@ -203,8 +203,15 @@ message RestoreResponse {
   int32 files = 2;
   int32 dirs = 3;
   int32 skipped = 4;
-  // Restored, but something needs attention (e.g. ownership not restored).
+  // Restored, but something needs attention (a file that could not be written).
   repeated string warnings = 5;
+  // Who the restored files belong to when the process doing the restore is not
+  // allowed to give files to anyone else (not root, no CAP_CHOWN/CAP_FOWNER):
+  // the ownership from the backup was not restored, the files belong to
+  // as_uid:as_gid. Not a warning: the files themselves are complete.
+  bool ownership_skipped = 6;
+  int32 as_uid = 7;
+  int32 as_gid = 8;
 }
 
 message PingRequest {}

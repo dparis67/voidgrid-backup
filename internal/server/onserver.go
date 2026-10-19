@@ -54,7 +54,10 @@ func runOn[T any](c *Controller, a catalog.Agent, repo catalog.Repository, timeo
 func restoreResponse(st engine.RestoreStats) *agentpb.RestoreResponse {
 	return &agentpb.RestoreResponse{
 		Bytes: st.Bytes, Files: safeint.Int32(st.Files), Dirs: safeint.Int32(st.Dirs), Skipped: safeint.Int32(st.Skipped),
-		Warnings: st.Warnings,
+		Warnings:         st.Warnings,
+		OwnershipSkipped: st.OwnershipSkipped,
+		AsUid:            safeint.Int32(st.AsUID),
+		AsGid:            safeint.Int32(st.AsGID),
 	}
 }
 

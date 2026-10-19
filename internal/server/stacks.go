@@ -108,7 +108,7 @@ func (c *Controller) RestoreStack(ctx context.Context, jobID, onID, snapshotID, 
 		}
 		run.Bytes, run.Files = resp.GetBytes(), int(resp.GetFiles())
 		run.Error = strings.Join(resp.GetWarnings(), "\n")
-		run.Summary += fmt.Sprintf(": %d files, %s", run.Files, HumanBytes(run.Bytes))
+		run.Summary = withOwnershipNote(run.Summary+fmt.Sprintf(": %d files, %s", run.Files, HumanBytes(run.Bytes)), resp, agent.Name)
 		return nil
 	})
 }

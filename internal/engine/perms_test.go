@@ -59,9 +59,19 @@ func TestRestoreReportsOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	warned := len(st.Warnings) == 1 && strings.Contains(st.Warnings[0], "ownership was not restored")
-	if e.canChown == warned {
-		t.Fatalf("canChown=%v but warnings=%q", e.canChown, st.Warnings)
+	// Ownership not being restored is a fact about who restored the files, not
+	// a warning: the restore is complete.
+	if len(st.Warnings) != 0 {
+		t.Fatalf("an ownership difference was reported as a warning: %q", st.Warnings)
+	}
+	if st.OwnershipSkipped == e.canChown {
+		t.Fatalf("canChown=%v but OwnershipSkipped=%v", e.canChown, st.OwnershipSkipped)
+	}
+	if st.OwnershipSkipped && (st.AsUID != os.Geteuid() || st.AsGID != os.Getegid()) {
+		t.Fatalf("restored as %d:%d, the process is %d:%d", st.AsUID, st.AsGID, os.Geteuid(), os.Getegid())
+	}
+	if uid, gid, can := e.RestoreIdentity(); uid != os.Geteuid() || gid != os.Getegid() || can != e.canChown {
+		t.Fatalf("RestoreIdentity = %d %d %v", uid, gid, can)
 	}
 }
 

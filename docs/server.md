@@ -622,7 +622,7 @@ history as kind `check`.
 | Status | Meaning |
 |---|---|
 | success | Everything was backed up / restored |
-| partial | It finished, but something needs attention: unreadable files (named), a failed database dump, a crash-consistent VM copy, ownership that couldn't be restored, or **ACTION NEEDED** for a VM disk left on an overlay |
+| partial | It finished, but something needs attention: unreadable files (named), a failed database dump, a crash-consistent VM copy, or **ACTION NEEDED** for a VM disk left on an overlay |
 | failed | Nothing usable was produced |
 | running | In progress. Runs still "running" when the server restarts are marked failed on start. |
 
@@ -673,7 +673,12 @@ container. It needs no agent, Docker or libvirt.
 - Like any other restore on a different host it always goes into a target
   directory; in-place restores stay on the job's own agent.
 - Files are owned by the user the server runs as, and ownership and special
-  permissions that need root are not restored unless it runs as root.
+  permissions that need root are not restored unless it runs as root. That is
+  not a failure: choosing **The server** (or an agent that is not root) on the
+  snapshot page shows a note saying so, with the uid:gid the files will get, and
+  the run finishes as a success whose summary reads "complete, files belong to
+  uid:gid N:N (the server does not run as root, so the ownership in the backup
+  was not restored)". A restore is only partial when a file could not be written.
 - To restore only part of a stack or VM snapshot (say one data folder), browse
   into it and use **Restore as files** on that folder; the "Restore stack"
   form restores the whole snapshot.

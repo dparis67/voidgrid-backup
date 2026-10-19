@@ -116,6 +116,12 @@ type RestoreStats struct {
 	Bytes                int64
 	Files, Dirs, Skipped int
 	Warnings             []string
+	// OwnershipSkipped is set when the restoring process may not give files to
+	// other users (not root, without CAP_CHOWN/CAP_FOWNER): the files are
+	// complete, but belong to AsUID:AsGID instead of their original owners. It
+	// is a fact about who restored them, not a warning.
+	OwnershipSkipped bool
+	AsUID, AsGID     int
 }
 
 // Engine keeps a Kopia connection config and cache per repository under dir.
@@ -127,7 +133,7 @@ type Engine struct {
 	canChown bool
 	// Recovery mode (the standalone restore tool): never write.
 	readOnly bool
-	uid      int
+	uid, gid int
 	cache    CacheConfig
 
 	// The upload in progress, for Progress. One at a time: the agent runs a
@@ -242,7 +248,7 @@ func New(dir, hostname string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{dir: abs, hostname: hostname, uid: os.Geteuid(), cache: DefaultCache()}
+	e := &Engine{dir: abs, hostname: hostname, uid: os.Geteuid(), gid: os.Getegid(), cache: DefaultCache()}
 	if c, err := caps.Current(); err == nil {
 		e.canChown = c.Has(caps.Chown) && c.Has(caps.FOwner)
 	}
@@ -655,11 +661,15 @@ func (e *Engine) restoreTo(ctx context.Context, rep repo.Repository, entry kfs.E
 		Dirs:    int(st.RestoredDirCount),
 		Skipped: int(st.SkippedCount),
 	}
-	if !e.canChown {
-		rs.Warnings = append(rs.Warnings, fmt.Sprintf(
-			"file ownership was not restored: the agent runs as uid %d without CAP_CHOWN/CAP_FOWNER, so restored files belong to it; run the agent as root", e.uid))
-	}
+	rs.OwnershipSkipped, rs.AsUID, rs.AsGID = !e.canChown, e.uid, e.gid
 	return rs, nil
+}
+
+// RestoreIdentity says who restored files will belong to, and whether this
+// process can restore the ownership recorded in a backup (root, or
+// CAP_CHOWN and CAP_FOWNER). When it cannot, they belong to uid:gid.
+func (e *Engine) RestoreIdentity() (uid, gid int, canChown bool) {
+	return e.uid, e.gid, e.canChown
 }
 
 // snapshotEntry opens a snapshot for reading. It does not check which host

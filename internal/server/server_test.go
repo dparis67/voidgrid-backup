@@ -9,7 +9,6 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -293,12 +292,6 @@ func TestHTTP(t *testing.T) {
 	}
 }
 
-// restoreOK accepts a successful restore, or, when the tests don't run as
-// root, one whose only warning is that ownership could not be restored.
-func restoreOK(r catalog.Run) bool {
-	if r.Status == catalog.RunSuccess {
-		return true
-	}
-	return os.Geteuid() != 0 && r.Status == catalog.RunPartial &&
-		strings.HasPrefix(r.Error, "file ownership was not restored") && !strings.Contains(r.Error, "\n")
-}
+// restoreOK accepts a successful restore. Not being allowed to give files to
+// other users (the tests do not run as root) does not make a restore partial.
+func restoreOK(r catalog.Run) bool { return r.Status == catalog.RunSuccess }

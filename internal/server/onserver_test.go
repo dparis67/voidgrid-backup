@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -65,7 +66,16 @@ func TestRestoreOnServer(t *testing.T) {
 	if body := get(t, client, page, "The server"); strings.Contains(body, "(unavailable)") {
 		t.Fatal("the server is offered as unavailable though it can open the repository")
 	}
-	get(t, client, page+"?on=server", "inside its own container")
+	body := get(t, client, page+"?on=server", "inside its own container")
+	// Choosing the server says up front that it does not run as root, when it does not.
+	if uid, gid, can := c.Engine.RestoreIdentity(); can {
+		if strings.Contains(body, "does not run as root") {
+			t.Fatal("a server that can restore ownership warns that it cannot")
+		}
+	} else if !strings.Contains(body, "The server does not run as root") ||
+		!strings.Contains(body, fmt.Sprintf("uid:gid %d:%d", uid, gid)) {
+		t.Fatalf("no warning that the server restores as its own user:\n%s", body)
+	}
 	root, err := c.Browse(ctx, job.ID, ServerHost, snaps[0].ID, "")
 	if err != nil || len(root) != 1 || root[0].GetName() != "docs" {
 		t.Fatalf("browse on the server: %+v %v", root, err)
@@ -77,6 +87,15 @@ func TestRestoreOnServer(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(target, "note.txt")); err != nil || string(b) != "hello" {
 		t.Fatalf("restored note.txt: %q %v", b, err)
+	}
+	// A restore that could not set ownership is complete, not partial, and says whose files they are.
+	if uid, gid, can := c.Engine.RestoreIdentity(); !can {
+		want := fmt.Sprintf("complete, files belong to uid:gid %d:%d (the server does not run as root", uid, gid)
+		if rr.Status != catalog.RunSuccess || rr.Error != "" || !strings.Contains(rr.Summary, want) {
+			t.Fatalf("a restore as the server's own user: status=%s error=%q summary=%q", rr.Status, rr.Error, rr.Summary)
+		}
+	} else if strings.Contains(rr.Summary, "uid:gid") {
+		t.Fatalf("ownership was restored but the summary says it was not: %q", rr.Summary)
 	}
 	// System directories are refused as on an agent.
 	if _, err := c.Restore(ctx, job.ID, ServerHost, snaps[0].ID, "docs", "/", false); err == nil {

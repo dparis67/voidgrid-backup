@@ -571,6 +571,9 @@ func (s *RestoreStats) add(o RestoreStats) {
 	s.Files += o.Files
 	s.Dirs += o.Dirs
 	s.Skipped += o.Skipped
+	if o.OwnershipSkipped {
+		s.OwnershipSkipped, s.AsUID, s.AsGID = true, o.AsUID, o.AsGID
+	}
 	for _, w := range o.Warnings {
 		if !slices.Contains(s.Warnings, w) {
 			s.Warnings = append(s.Warnings, w)

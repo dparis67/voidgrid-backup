@@ -19,6 +19,7 @@
   {{else if $on}}<p class="hint">Restores here need a target directory on that agent; in-place restores only run on the job's own agent.</p>{{end}}
   {{if and .ServerWhy (eq $on "server")}}<p class="err">{{.ServerWhy}}</p>{{end}}
   {{end}}
+  {{if .RestoreNote}}<p class="hint warn">{{.RestoreNote}}</p>{{end}}
   <div class="card">
     {{if .Entries}}
     <table>
