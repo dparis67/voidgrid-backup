@@ -18,6 +18,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/enroll"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 )
@@ -136,7 +137,7 @@ func (a *Agent) registerOnce(ctx context.Context, cfg RegisterConfig, tok enroll
 	if !*registered {
 		cctx, cancel := call()
 		_, err := client.Register(cctx, &agentpb.RegisterRequest{
-			Secret: tok.Secret, Hostname: a.hostname, Version: version.Version, ListenPort: int32(cfg.ListenPort),
+			Secret: tok.Secret, Hostname: a.hostname, Version: version.Version, ListenPort: safeint.Int32(cfg.ListenPort),
 		})
 		cancel()
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 )
 
 // ServerHost is the "restore on" value that means the server itself, for when
@@ -52,7 +53,7 @@ func runOn[T any](c *Controller, a catalog.Agent, repo catalog.Repository, timeo
 
 func restoreResponse(st engine.RestoreStats) *agentpb.RestoreResponse {
 	return &agentpb.RestoreResponse{
-		Bytes: st.Bytes, Files: int32(st.Files), Dirs: int32(st.Dirs), Skipped: int32(st.Skipped),
+		Bytes: st.Bytes, Files: safeint.Int32(st.Files), Dirs: safeint.Int32(st.Dirs), Skipped: safeint.Int32(st.Skipped),
 		Warnings: st.Warnings,
 	}
 }

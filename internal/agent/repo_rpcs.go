@@ -12,6 +12,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/guard"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 )
 
 func toRepo(r *agentpb.Repository) (engine.Repo, error) {
@@ -93,15 +94,15 @@ func toPathResult(res engine.PathResult) *agentpb.PathResult {
 		Path:        res.Path,
 		SnapshotId:  res.SnapshotID,
 		Bytes:       res.Bytes,
-		Files:       int32(res.Files),
-		Errors:      int32(res.Errors),
-		Pruned:      int32(res.Pruned),
+		Files:       safeint.Int32(res.Files),
+		Errors:      safeint.Int32(res.Errors),
+		Pruned:      safeint.Int32(res.Pruned),
 		Warnings:    res.Warnings,
 		StartUnix:   res.Start,
 		EndUnix:     res.End,
 		Incomplete:  res.Incomplete,
 		PrunedIds:   res.PrunedIDs,
-		CachedFiles: int32(res.CachedFiles),
+		CachedFiles: safeint.Int32(res.CachedFiles),
 		Timings: &agentpb.PhaseTimings{
 			OpenMs:        res.Timings.Open.Milliseconds(),
 			PrepareMs:     res.Timings.Prepare.Milliseconds(),
@@ -137,8 +138,8 @@ func (a *Agent) ListSnapshots(ctx context.Context, req *agentpb.ListSnapshotsReq
 			StartUnix:  s.Start,
 			EndUnix:    s.End,
 			Bytes:      s.Bytes,
-			Files:      int32(s.Files),
-			Errors:     int32(s.Errors),
+			Files:      safeint.Int32(s.Files),
+			Errors:     safeint.Int32(s.Errors),
 			Incomplete: s.Incomplete,
 		})
 	}
@@ -180,7 +181,7 @@ func (a *Agent) Restore(ctx context.Context, req *agentpb.RestoreRequest) (*agen
 
 func toRestoreResponse(st engine.RestoreStats) *agentpb.RestoreResponse {
 	return &agentpb.RestoreResponse{
-		Bytes: st.Bytes, Files: int32(st.Files), Dirs: int32(st.Dirs), Skipped: int32(st.Skipped),
+		Bytes: st.Bytes, Files: safeint.Int32(st.Files), Dirs: safeint.Int32(st.Dirs), Skipped: safeint.Int32(st.Skipped),
 		Warnings: st.Warnings,
 	}
 }

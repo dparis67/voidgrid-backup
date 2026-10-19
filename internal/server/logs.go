@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 )
 
 const (
@@ -53,7 +54,7 @@ func (c *Controller) Logs(ctx context.Context, source string, min slog.Level, li
 		return nil, fmt.Errorf("agent: %w", err)
 	}
 	resp, err := withAgent(c, agent, logsTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.LogsResponse, error) {
-		return cl.Logs(ctx, &agentpb.LogsRequest{MinLevel: int32(min), Limit: int32(limit)})
+		return cl.Logs(ctx, &agentpb.LogsRequest{MinLevel: safeint.Int32(int(min)), Limit: safeint.Int32(limit)})
 	})
 	if err != nil {
 		return nil, err

@@ -33,6 +33,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/logbuf"
 	"github.com/voidgrid/voidgrid-backup/internal/pki"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 	"github.com/voidgrid/voidgrid-backup/internal/version"
 	"github.com/voidgrid/voidgrid-backup/internal/virt"
 )
@@ -210,7 +211,7 @@ func (a *Agent) Ping(context.Context, *agentpb.PingRequest) (*agentpb.PingRespon
 		Hostname: a.hostname,
 		Version:  version.Version,
 		UnixTime: time.Now().Unix(),
-		Uid:      int32(os.Geteuid()),
+		Uid:      safeint.Int32(os.Geteuid()),
 	}
 	c, err := caps.Current()
 	if err != nil {

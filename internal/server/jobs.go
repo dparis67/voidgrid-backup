@@ -20,6 +20,7 @@ import (
 	"github.com/voidgrid/voidgrid-backup/internal/notify"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
 	"github.com/voidgrid/voidgrid-backup/internal/repocfg"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
@@ -162,6 +163,9 @@ type JobInput struct {
 	Enabled                     bool
 }
 
+// maxKeep is the most snapshots of one kind a job may keep.
+const maxKeep = 1_000_000
+
 // validateJobBody checks and fills in what creating and editing a job share:
 // what it backs up (paths, a stack or a VM), the schedule and the retention.
 // It sets j.Kind from the shape of in.
@@ -201,6 +205,12 @@ func validateJobBody(in JobInput, j *catalog.Job) error {
 	k := j.Keep
 	if k.Latest < 0 || k.Hourly < 0 || k.Daily < 0 || k.Weekly < 0 || k.Monthly < 0 || k.Annual < 0 {
 		return errors.New("retention counts cannot be negative")
+	}
+	// An upper bound as well: the counts travel to the agent as 32-bit numbers,
+	// and a huge one that wrapped would turn into a small count and have
+	// retention delete snapshots the operator meant to keep.
+	if k.Latest > maxKeep || k.Hourly > maxKeep || k.Daily > maxKeep || k.Weekly > maxKeep || k.Monthly > maxKeep || k.Annual > maxKeep {
+		return fmt.Errorf("retention counts cannot be more than %d", maxKeep)
 	}
 	if k.Latest+k.Hourly+k.Daily+k.Weekly+k.Monthly+k.Annual == 0 {
 		return errors.New("retention keeps nothing; set at least one count")
@@ -337,9 +347,9 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 		Paths:      job.Paths,
 		Excludes:   job.Excludes,
 		Retention: &agentpb.Retention{
-			KeepLatest: int32(job.Keep.Latest), KeepHourly: int32(job.Keep.Hourly),
-			KeepDaily: int32(job.Keep.Daily), KeepWeekly: int32(job.Keep.Weekly),
-			KeepMonthly: int32(job.Keep.Monthly), KeepAnnual: int32(job.Keep.Annual),
+			KeepLatest: safeint.Int32(job.Keep.Latest), KeepHourly: safeint.Int32(job.Keep.Hourly),
+			KeepDaily: safeint.Int32(job.Keep.Daily), KeepWeekly: safeint.Int32(job.Keep.Weekly),
+			KeepMonthly: safeint.Int32(job.Keep.Monthly), KeepAnnual: safeint.Int32(job.Keep.Annual),
 		},
 	}
 	if s := job.Stack; s != nil {

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 )
 
 const (
@@ -30,7 +31,7 @@ func (a *Agent) Logs(_ context.Context, req *agentpb.LogsRequest) (*agentpb.Logs
 	resp := &agentpb.LogsResponse{}
 	for _, e := range a.LogBuf.Entries(slog.Level(req.GetMinLevel()), limit) {
 		resp.Entries = append(resp.Entries, &agentpb.LogEntry{
-			Seq: e.Seq, UnixNano: e.Time.UnixNano(), Level: int32(e.Level), Message: e.Message, Attrs: e.Attrs,
+			Seq: e.Seq, UnixNano: e.Time.UnixNano(), Level: safeint.Int32(int(e.Level)), Message: e.Message, Attrs: e.Attrs,
 		})
 	}
 	return resp, nil

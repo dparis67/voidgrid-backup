@@ -5,6 +5,7 @@ import (
 
 	"github.com/voidgrid/voidgrid-backup/internal/engine"
 	"github.com/voidgrid/voidgrid-backup/internal/proto/agentpb"
+	"github.com/voidgrid/voidgrid-backup/internal/safeint"
 )
 
 func (a *Agent) Check(ctx context.Context, req *agentpb.CheckRequest) (*agentpb.CheckResponse, error) {
@@ -23,7 +24,7 @@ func (a *Agent) Check(ctx context.Context, req *agentpb.CheckRequest) (*agentpb.
 		return nil, err
 	}
 	return &agentpb.CheckResponse{
-		Snapshots:        int32(res.Snapshots),
+		Snapshots:        safeint.Int32(res.Snapshots),
 		ObjectsChecked:   res.ObjectsChecked,
 		FilesRead:        res.FilesRead,
 		BytesRead:        res.BytesRead,
