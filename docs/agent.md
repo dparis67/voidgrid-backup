@@ -107,6 +107,14 @@ Docker and libvirt report **host** paths, so every stack directory, bind
 mount source and VM disk directory must be mounted into the agent **at the
 same path** it has on the host (`/srv/stacks:/srv/stacks`).
 
+The path is the one the tool reports, not where the data really lives. libvirt
+gives a VM disk's path exactly as the domain defines it, so if that path goes
+through a symlink on the host (a domain pointing at `/home/<user>/dockers/...`
+where `dockers` is a link), that path must exist inside the container. Mount the
+real directory onto the reported path, for example
+`/data/dockers:/home/<user>/dockers:ro`. The VMs page shows the paths the agent
+will open; a disk whose path is missing in the container fails the backup.
+
 Mount backup sources **read-only** (`:ro`). They can still be backed up, but
 the agent refuses an in-place restore to them up front and the UI marks them
 "read-only in the agent". Restore to another directory instead, and give the
@@ -139,7 +147,11 @@ key behind it.
   ```
 
   On a Hetzner Storage Box this is the `.ssh/authorized_keys` file in its
-  home directory.
+  home directory. Add keys with Hetzner's `install-ssh-key` command (for
+  example `cat ~/.ssh/id_ed25519.pub | ssh -p23 uXXXXX@uXXXXX.your-storagebox.de install-ssh-key`),
+  which appends. Copying the file with `scp` replaces the whole file and removes
+  every key already there. Port 23 takes the one-line OpenSSH format shown
+  above; port 22 needs the RFC 4716 form, which `install-ssh-key` also writes.
 - Don't reuse one key everywhere unless you accept that revoking it cuts off
   every host at once.
 - The key file must be readable by the user the agent runs as.
@@ -278,6 +290,13 @@ place, run `docker compose up -d` in the compose directory, then import the
 dumps.
 
 ## Virtual machines
+
+The agent talks to libvirt over a Unix socket that is mounted into the
+container. Hosts with a single `libvirtd` have `/var/run/libvirt/libvirt-sock`.
+Newer distributions split libvirt into per-driver daemons, and the QEMU socket is
+then `/var/run/libvirt/virtqemud-sock`. Set `LIBVIRT_SOCKET` in `.env` to
+whichever exists on the host; the example compose file mounts it at the path the
+agent expects, so `VB_LIBVIRT_SOCKET` stays as it is.
 
 The agent's **VMs** page lists the libvirt domains and their disks. Only
 writable file-backed disks can be backed up; CD-ROMs and block devices are
