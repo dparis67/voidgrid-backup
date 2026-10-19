@@ -601,7 +601,7 @@ seconds and the pages refresh every three while anything runs. See
 
 A job page has "Back up now", "Verify repository", the schedule switch, a
 collapsed **Delete...** form, run history and the snapshot list (the Jobs list
-links each row to that form). Deleting a job removes it and its run history;
+has no delete control: open the job). Deleting a job removes it and its run history;
 its snapshots stay in the repository unless you tick **Also delete its
 snapshots**, which forgets every snapshot in the job's list first (and keeps the
 job if that fails). That cannot be undone, and the space is released by the next

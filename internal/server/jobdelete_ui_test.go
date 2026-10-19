@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestDeleteJobControlIsInTheHeaderAndLinkedFromTheList(t *testing.T) {
+func TestDeleteJobControlIsInTheHeaderOnly(t *testing.T) {
 	ctx := context.Background()
 	c, job, _ := setupJob(t)
 	srv := httptest.NewServer(NewHandler(c))
@@ -24,9 +24,10 @@ func TestDeleteJobControlIsInTheHeaderAndLinkedFromTheList(t *testing.T) {
 		t.Fatalf("the delete form is on the page more than once:\n%s", page)
 	}
 
-	list := get(t, client, srv.URL+"/jobs", "/jobs/"+job.ID+"#delete")
-	if !strings.Contains(list, "Delete…") {
-		t.Fatalf("the Jobs list has no delete link:\n%s", list)
+	// The Jobs list has no delete control: deleting is done from a job's page.
+	list := get(t, client, srv.URL+"/jobs", "/jobs/"+job.ID)
+	if strings.Contains(list, ">Delete") || strings.Contains(list, "#delete") || strings.Contains(list, `/delete"`) {
+		t.Fatalf("the Jobs list offers to delete a job:\n%s", list)
 	}
 
 	// A running job shows neither.

@@ -103,12 +103,5 @@
   </div>
   </div>
 
-  <script>
-  // The Jobs list links here with #delete: open the fold it points at.
-  (function () {
-    var d = document.getElementById("delete");
-    if (d && location.hash === "#delete") d.open = true;
-  })();
-  </script>
   {{if or $job.Running .SnapBusy}}<div id="live" data-ids="job-head,job-runs,job-snaps" data-every="3000" hidden></div>{{end}}
 {{template "bottom" .}}{{end}}
