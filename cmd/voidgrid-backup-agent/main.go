@@ -51,6 +51,7 @@ func main() {
 	libvirtURI := envflag.String("libvirt-uri", "VB_LIBVIRT_URI", "qemu:///system", "libvirt connection URI")
 	cacheDir := envflag.String("cache-dir", "VB_CACHE_DIR", "", "base directory for Kopia's local cache, one subdirectory per repository; empty keeps it in the data directory")
 	cacheMetadataMB := envflag.Int("cache-metadata-mb", "VB_CACHE_METADATA_MB", 256, "size limit in MiB, per repository, of the cache an incremental backup needs (directories and metadata)")
+	ipv4Only := envflag.Bool("ipv4-only", "VB_IPV4_ONLY", false, "connect to SFTP storage over IPv4 only; for hosts without IPv6 whose resolver sometimes returns only an IPv6 address")
 	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the cache of file data read back for restores and checks; 0 turns the whole cache off")
 
 	args := os.Args[1:]
@@ -62,6 +63,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err) // flag.ExitOnError has exited already; this keeps the check explicit
 		os.Exit(2)
 	}
+	engine.SetIPv4Only(*ipv4Only)
 	c := config{listen: *listen, healthListen: *healthListen, data: *data, server: *serverAddr, token: *token,
 		dockerSocket: *dockerSocket, libvirtSocket: *libvirtSocket, libvirtURI: *libvirtURI,
 		cacheDir: *cacheDir, cacheMetadataMB: *cacheMetadataMB, cacheContentMB: *cacheContentMB}

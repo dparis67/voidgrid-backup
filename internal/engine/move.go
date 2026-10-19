@@ -337,7 +337,7 @@ func dialSFTP(ctx context.Context, s repocfg.SFTP) (*pkgsftp.Client, func(), err
 	}
 	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
 	d := net.Dialer{Timeout: 30 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	conn, err := d.DialContext(ctx, tcpNetwork(), addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect to %s: %w", addr, err)
 	}

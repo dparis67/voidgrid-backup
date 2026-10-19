@@ -745,14 +745,18 @@ func storage(ctx context.Context, c repocfg.Config, create bool) (blob.Storage, 
 	switch c.Kind {
 	case repocfg.KindSFTP:
 		s := c.SFTP
+		host, knownHosts, err := sftpEndpoint(ctx, s.Host, s.Port, s.KnownHosts)
+		if err != nil {
+			return nil, err
+		}
 		return sftp.New(ctx, &sftp.Options{
 			Path:           s.Path,
-			Host:           s.Host,
+			Host:           host,
 			Port:           s.Port,
 			Username:       s.User,
 			Password:       s.Password,
 			Keyfile:        s.KeyFile,
-			KnownHostsData: s.KnownHosts,
+			KnownHostsData: knownHosts,
 		}, create)
 	case repocfg.KindS3:
 		s := c.S3

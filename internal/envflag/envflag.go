@@ -33,6 +33,20 @@ func Duration(name, env string, def time.Duration, usage string) *time.Duration 
 	return flag.Duration(name, def, usage+" [$"+env+"]")
 }
 
+// Bool registers a bool flag defaulting to $env when set, else def. An
+// unparsable $env is a startup error rather than a silent fallback.
+func Bool(name, env string, def bool, usage string) *bool {
+	if v, ok := os.LookupEnv(env); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invalid $%s=%q: %v\n", env, v, err)
+			os.Exit(2)
+		}
+		def = b
+	}
+	return flag.Bool(name, def, usage+" [$"+env+"]")
+}
+
 // Int registers an int flag defaulting to $env when set, else def. An
 // unparsable $env is a startup error rather than a silent fallback.
 func Int(name, env string, def int, usage string) *int {

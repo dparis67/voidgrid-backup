@@ -21,7 +21,7 @@ var errGotKey = errors.New("host key captured")
 func FetchHostKey(ctx context.Context, host string, port int) (string, error) {
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	d := net.Dialer{Timeout: 15 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	conn, err := d.DialContext(ctx, tcpNetwork(), addr)
 	if err != nil {
 		return "", fmt.Errorf("fetch host key: %w", err)
 	}

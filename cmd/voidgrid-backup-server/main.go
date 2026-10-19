@@ -39,6 +39,7 @@ func main() {
 	poll := envflag.Duration("poll", "VB_POLL", 30*time.Second, "how often to check agents")
 	cacheDir := envflag.String("cache-dir", "VB_CACHE_DIR", "", "base directory for Kopia's local cache of repositories the server maintains, one subdirectory per repository; empty keeps it in the data directory")
 	cacheMetadataMB := envflag.Int("cache-metadata-mb", "VB_CACHE_METADATA_MB", 256, "size limit in MiB, per repository, of the metadata cache")
+	ipv4Only := envflag.Bool("ipv4-only", "VB_IPV4_ONLY", false, "connect to SFTP storage over IPv4 only; for hosts without IPv6 whose resolver sometimes returns only an IPv6 address")
 	cacheContentMB := envflag.Int("cache-content-mb", "VB_CACHE_CONTENT_MB", 64, "size limit in MiB, per repository, of the file-data cache; 0 turns the whole cache off")
 	oidcIssuer := envflag.String("oidc-issuer", "VB_OIDC_ISSUER", "", "OIDC provider issuer URL; empty disables login and leaves every route open")
 	oidcClientID := envflag.String("oidc-client-id", "VB_OIDC_CLIENT_ID", "", "OIDC client ID")
@@ -56,6 +57,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err) // flag.ExitOnError has exited already; this keeps the check explicit
 		os.Exit(2)
 	}
+	engine.SetIPv4Only(*ipv4Only)
 	if printToken {
 		tok, err := readToken(*data)
 		if err != nil {
