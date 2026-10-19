@@ -255,9 +255,9 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, "login expired; try again", nil)
 		return
 	}
-	a.clearCookie(w, oauthState)
-	a.clearCookie(w, oauthVerifier)
-	a.clearCookie(w, oauthNonce)
+	a.clearCookie(w, r, oauthState)
+	a.clearCookie(w, r, oauthVerifier)
+	a.clearCookie(w, r, oauthNonce)
 
 	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) != 1 {
 		fail(http.StatusBadRequest, "state mismatch", nil)
@@ -311,31 +311,13 @@ func (a *Authenticator) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(oauthReturnTo); err == nil && strings.HasPrefix(c.Value, "/") && !strings.HasPrefix(c.Value, "//") {
 		returnTo = c.Value
 	}
-	a.clearCookie(w, oauthReturnTo)
+	a.clearCookie(w, r, oauthReturnTo)
 	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func (a *Authenticator) handleLogout(w http.ResponseWriter, r *http.Request) {
-	a.clearCookie(w, sessionCookie)
+	a.clearCookie(w, r, sessionCookie)
 	http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-}
-
-// secure reports whether cookies should carry the Secure flag: the request
-// arrived over TLS, directly or (trusting the operator's own reverse proxy,
-// as documented) via X-Forwarded-Proto.
-func secure(r *http.Request) bool {
-	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
-}
-
-func (a *Authenticator) setCookie(w http.ResponseWriter, r *http.Request, name, value string, maxAge time.Duration) {
-	http.SetCookie(w, &http.Cookie{
-		Name: name, Value: value, Path: "/", HttpOnly: true, Secure: secure(r),
-		SameSite: http.SameSiteLaxMode, MaxAge: int(maxAge.Seconds()),
-	})
-}
-
-func (a *Authenticator) clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1})
 }
 
 // --- signed tokens (session cookie payload) ---

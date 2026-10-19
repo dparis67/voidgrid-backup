@@ -110,6 +110,18 @@ It reads the same `VB_LISTEN` and probes `/healthz` on loopback.
   flood the log.
 - Agent traffic is mutual TLS with the server's own CA. An approved agent
   accepts only the server's client certificate.
+- Cookies (the session and the sign-in state) are always `HttpOnly` and
+  `SameSite=Lax`, and `Secure` whenever the request arrived over HTTPS, either
+  directly or through your reverse proxy. Behind a proxy that ends TLS, the
+  server only knows the request was HTTPS if the proxy sends
+  `X-Forwarded-Proto: https`; without it the cookies are not marked `Secure`,
+  and a browser would send them over plain HTTP if you ever visit the UI that
+  way. Traefik sends the header by default; check your own proxy's
+  documentation, and in nginx add `proxy_set_header X-Forwarded-Proto $scheme;`. The server trusts the header
+  from whoever sends it, which is harmless: a client faking it over plain HTTP
+  only makes its own cookie `Secure`, and the browser then discards it. On plain
+  HTTP (a LAN with nothing in front) the cookies are not `Secure`, because a
+  browser would drop them.
 - Cross-site form posts are refused (Go's `net/http.CrossOriginProtection`),
   so another site in your browser can't trigger actions here even while
   you're signed in.

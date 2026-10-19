@@ -36,13 +36,6 @@ linters:
         linters: [gosec]
       - path: internal/(docker/dockertest|virt/virttest)/
         linters: [gosec]
-      # The session and login-state cookies are HttpOnly and SameSite=Lax always,
-      # and Secure whenever the request came over HTTPS (directly or through the
-      # operator's reverse proxy). A literal Secure: true would break the UI over
-      # plain HTTP. Only this rule, only this file.
-      - path: internal/webauth/webauth\.go
-        linters: [gosec]
-        text: "G124"
       # G304 (opening a path held in a variable) is excused for exactly two
       # functions, each in a file of its own, because the path is the operator's
       # own argument and opening it is the feature: the recovery tool's
@@ -56,6 +49,14 @@ linters:
       - path: internal/engine/emptydir\.go
         linters: [gosec]
         text: "G304"
+      # Cookies are HttpOnly and SameSite=Lax always, and Secure whenever the
+      # request came over HTTPS (directly or through the operator's reverse proxy).
+      # On plain HTTP a browser drops a Secure cookie, so the flag is off there and
+      # gosec's G124 cannot tell why. That decision lives in one function in one
+      # file; only this rule, only this file.
+      - path: internal/webauth/cookies\.go
+        linters: [gosec]
+        text: "G124"
       # An agent enrolling has no CA to trust yet. Its token carries the hash of
       # the server's certificate, and VerifyConnection rejects any other one, so
       # the connection is pinned, not unverified. gosec cannot see that check and
