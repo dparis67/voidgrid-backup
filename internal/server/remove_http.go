@@ -127,6 +127,21 @@ func (u *ui) setMaintainer(w http.ResponseWriter, r *http.Request) {
 	redirectNotice(w, r, back, msg)
 }
 
+// setMaintSchedule saves when the repository's scheduled maintenance runs.
+func (u *ui) setMaintSchedule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rp, err := u.c.Catalog.Repository(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := u.c.SetMaintSchedule(r.Context(), id, r.FormValue("mode"), r.FormValue("cron")); err != nil {
+		redirectNotice(w, r, "/repositories", "Not changed: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, "/repositories", "Maintenance of "+rp.Name+" now runs "+u.c.MaintSchedule(r.Context(), id).describe()+".")
+}
+
 // takeOverMaintenance is the one-click fix on a repository whose maintenance
 // owner is gone: the form names the server or an assigned agent.
 func (u *ui) takeOverMaintenance(w http.ResponseWriter, r *http.Request) {

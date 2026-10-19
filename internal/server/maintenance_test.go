@@ -36,8 +36,8 @@ func TestMaintainRepositoryRecordsAndSchedules(t *testing.T) {
 	if err != nil || m.Status != "ok" || m.AgentID != job.AgentID {
 		t.Fatalf("maintain: %+v %v", m, err)
 	}
-	if want := before.Add(maintInterval + 30*time.Minute); m.NextDue.Before(want) || m.NextDue.After(want.Add(time.Minute)) {
-		t.Fatalf("next due %v, want about %v (24h plus the jitter)", m.NextDue, want)
+	if want := before.Add(maintAfterGap); m.NextDue.Before(want) || m.NextDue.After(want.Add(time.Minute)) {
+		t.Fatalf("next due %v, want about %v (the gap after a run)", m.NextDue, want)
 	}
 	got, ok := c.RepoMaintenance(ctx, job.RepositoryID)
 	if !ok || got.Status != "ok" || got.LastRun.IsZero() {
@@ -92,6 +92,16 @@ func TestStartMaintenanceSchedule(t *testing.T) {
 		t.Fatal("a repository not yet due must not run")
 	}
 
+	// Due, but no job has run since: after its jobs, so nothing yet.
+	c.startMaintenance(ctx, now.Add(2*time.Hour))
+	waitIdle(t, c, repoMaintRunKey(job.RepositoryID))
+	if m2, _ := c.RepoMaintenance(ctx, job.RepositoryID); !m2.LastRun.IsZero() {
+		t.Fatal("maintenance ran before any job had")
+	}
+	if _, err := c.RunJob(ctx, job.ID, "manual"); err != nil {
+		t.Fatal(err)
+	}
+
 	// Due, but a job on it is running: wait for the next tick.
 	if !c.inflight.start(job.ID) {
 		t.Fatal("job already running")
@@ -108,7 +118,7 @@ func TestStartMaintenanceSchedule(t *testing.T) {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		if m2, _ := c.RepoMaintenance(ctx, job.RepositoryID); !m2.LastRun.IsZero() {
-			if m2.Status != "ok" || m2.NextDue.Before(time.Now().Add(maintInterval)) {
+			if m2.Status != "ok" || m2.NextDue.Before(time.Now().Add(maintAfterGap-time.Minute)) {
 				t.Fatalf("after the run: %+v", m2)
 			}
 			break

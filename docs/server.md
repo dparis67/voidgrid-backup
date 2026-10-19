@@ -520,9 +520,26 @@ assigned to it, and the server, to open it and says which can.
 Maintenance (compaction and garbage collection) is run by the repository's
 maintenance owner, and only by it. It runs at the end of each backup when
 Kopia's own schedule says it is due, and in addition the server runs a **full**
-cycle every 24 hours (plus a random 0-1 hour, so repositories don't all start
-together; the first runs after a server start are spread over 2 hours) for each
-repository that has at least one job. A repository with a running job waits.
+cycle for each repository that has at least one job. A repository with a running
+job waits. When the cycle runs is set per repository (Repositories, Manage,
+**When maintenance runs**):
+
+- **After the repository's jobs have finished** (the default). The cycle starts
+  once every enabled, scheduled job on the repository has run since the last
+  cycle began, at least 20 hours after that cycle began. A job that failed has
+  still run, so a failing job does not stop maintenance. A scheduled job counts
+  only if it is due within the next 12 hours, so a weekly job is not waited for
+  by a daily cycle. A repository whose jobs are all manual runs after any one of
+  them has run. If the cycle has waited 48 hours past its earliest time it runs
+  regardless, so a job that never runs cannot starve it.
+- **At a fixed time.** A cron expression in the server's time zone. The cycle
+  runs at those times whatever the jobs do, so a time ahead of the first job
+  gives "before the jobs". A cycle that would start while a job is running waits
+  for it to finish.
+
+A failed cycle is tried again after about an hour in either mode. Switching mode
+re-plans the next cycle at once. The first runs after a server start are spread
+over 2 hours in "after" mode.
 A repository without jobs is never scheduled. The **Run now** button on the
 Repositories page runs a full cycle on demand and works for every repository.
 On a job's page, tick **then run maintenance** next to **Back up now** to back

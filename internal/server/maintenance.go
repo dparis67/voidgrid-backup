@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// maintInterval is the time between full maintenance cycles of a repository
-	// that has jobs. maintJitter is added after every run, and maintFirstSpread
+	// maintInterval is the fallback gap if a cron schedule cannot be read.
+	// maintJitter is added to a retry after a failure, and maintFirstSpread
 	// spreads the first runs after the server starts, so repositories never all
 	// begin together.
 	maintInterval    = 24 * time.Hour
@@ -116,7 +116,7 @@ func (c *Controller) MaintainRepository(ctx context.Context, repoID string) (Rep
 		m.NextDue = now.Add(maintRetry + maintRand(maintJitter))
 		slog.Error("maintenance failed", "repo", repo.ID, "name", repo.Name, "err", err)
 	} else {
-		m.NextDue = now.Add(maintInterval + maintRand(maintJitter))
+		m.NextDue = nextAfterRun(c.MaintSchedule(ctx, repoID), now, time.Now())
 		slog.Info("maintenance finished", "repo", repo.ID, "name", repo.Name, "agent", agentID, "next", m.NextDue.Format(time.RFC3339))
 	}
 	c.saveMaintenance(context.WithoutCancel(ctx), repoID, m)
@@ -189,8 +189,9 @@ func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository
 }
 
 // startMaintenance starts the full cycle of every repository that has jobs
-// and is due. A repository seen for the first time gets a random start time
-// within maintFirstSpread. A repository with a running job waits for the next
+// and is due (see MaintSchedule for what due means). A repository seen for the
+// first time gets a start time (a random one within maintFirstSpread, or the next
+// cron time). A repository with a running job waits for the next
 // tick; repositories without jobs are never scheduled (the button still works).
 func (c *Controller) startMaintenance(ctx context.Context, now time.Time) {
 	jobs, err := c.Catalog.ListJobs(ctx)
@@ -201,7 +202,9 @@ func (c *Controller) startMaintenance(ctx context.Context, now time.Time) {
 		return
 	}
 	busy := map[string]bool{} // repository ID -> has a job, true if one is running
+	byRepo := map[string][]catalog.Job{}
 	for _, j := range jobs {
+		byRepo[j.RepositoryID] = append(byRepo[j.RepositoryID], j)
 		busy[j.RepositoryID] = busy[j.RepositoryID] || c.IsRunning(j.ID)
 	}
 	repos, err := c.Catalog.ListRepositories(ctx)
@@ -216,12 +219,13 @@ func (c *Controller) startMaintenance(ctx context.Context, now time.Time) {
 		if !hasJobs || r.InitializedAt.IsZero() {
 			continue
 		}
+		sched := c.MaintSchedule(ctx, r.ID)
 		m, ok := c.RepoMaintenance(ctx, r.ID)
 		if !ok {
-			c.saveMaintenance(ctx, r.ID, RepoMaintenance{NextDue: now.Add(maintRand(maintFirstSpread))})
+			c.saveMaintenance(ctx, r.ID, RepoMaintenance{NextDue: firstDue(sched, RepoMaintenance{}, now)})
 			continue
 		}
-		if now.Before(m.NextDue) || running || c.IsRunning(repoMaintRunKey(r.ID)) {
+		if running || c.IsRunning(repoMaintRunKey(r.ID)) || !c.maintenanceDue(ctx, sched, m, byRepo[r.ID], now) {
 			continue
 		}
 		go func(id string) {

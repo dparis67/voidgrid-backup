@@ -66,7 +66,13 @@ func (c *Controller) maintSlots(ctx context.Context, repos []catalog.Repository,
 			continue
 		}
 		d, longest, guess := maintDuration(runs)
-		start := m.NextDue
+		var repoJobs []catalog.Job
+		for _, j := range jobs {
+			if j.RepositoryID == r.ID {
+				repoJobs = append(repoJobs, j)
+			}
+		}
+		start := c.maintEstimate(ctx, c.MaintSchedule(ctx, r.ID), m, repoJobs, now)
 		if start.Before(now) {
 			start = now // overdue: it starts at the next scheduler tick
 		}

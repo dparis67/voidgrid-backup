@@ -44,6 +44,7 @@ func NewHandler(c *Controller) http.Handler {
 		"sub1":      func(n int) int { return n - 1 },
 		"sortHeads": sortHeads,
 		"when":      func(t time.Time) string { return whenStr(t) },
+		"future":    func(t time.Time) bool { return t.After(time.Now()) },
 		"bytes":     HumanBytes,
 		"short":     shortID,
 		"join":      strings.Join,
@@ -85,6 +86,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories/{id}/stats", u.refreshRepoStats)
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
+	mux.HandleFunc("POST /repositories/{id}/maint-schedule", u.setMaintSchedule)
 	mux.HandleFunc("POST /repositories/{id}/takeover", u.takeOverMaintenance)
 	mux.HandleFunc("POST /repositories/{id}/agents", u.assignAgent)
 	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/remove", u.unassignAgent)
@@ -374,6 +376,7 @@ type repoRow struct {
 	MaintRuns   []catalog.MaintenanceRun // its last cycles, newest first
 	WipeError   string                   // why the last wipe failed
 	MaintBy     string                   // "server" or "agent": who runs maintenance
+	MaintSched  MaintSchedule            // when scheduled maintenance runs
 	Assigned    []assignedAgent
 	Unassigned  []catalog.Agent // agents that could still be assigned
 	ServerOK    bool            // the server can open it itself, so it can stand in for an agent
@@ -436,6 +439,7 @@ func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int
 		row.WipeError = u.c.WipeError(ctx, rp.ID)
 		row.ServerNote, row.ServerWarn = u.c.ServerReachNote(ctx, rp)
 		row.MaintBy = u.c.MaintainedBy(ctx, rp.ID)
+		row.MaintSched = u.c.MaintSchedule(ctx, rp.ID)
 		if m, ok := u.c.RepoMaintenance(ctx, rp.ID); ok {
 			row.Maint = &m
 		}

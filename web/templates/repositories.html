@@ -42,7 +42,7 @@
               <select name="to">{{if .ServerOK}}<option value="server">the server</option>{{end}}{{range .Assigned}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
               <button class="plain" type="submit" title="Hands maintenance to the one chosen. Nothing may be running on the repository.">Take over maintenance</button>
             </form>{{end}}
-            {{if .Jobs}}<div class="muted">next {{when .Maint.NextDue}}</div>{{end}}
+            {{if .Jobs}}<div class="muted">{{if eq .MaintSched.Mode "at"}}at <span class="mono">{{.MaintSched.Cron}}</span>, next {{when .Maint.NextDue}}{{else}}after its jobs{{if future .Maint.NextDue}}, not before {{when .Maint.NextDue}}{{end}}{{end}}</div>{{end}}
           {{else}}<span class="muted">{{if .Jobs}}scheduled soon{{else}}manual only{{end}}</span>{{end}}
           <div class="muted">by {{.MaintBy}}</div>
           {{if not .InitializedAt.IsZero}}<form method="post" action="/repositories/{{.ID}}/maintain" class="inline"><button class="plain" type="submit" {{if or .Maintaining .Wiping}}disabled{{end}} title="Full maintenance on the repository's maintenance owner. Deleted data is released only after Kopia's safety delays.">Run now</button></form>{{end}}</dd></div>
@@ -80,6 +80,13 @@
           <p class="hint">Blank uses the repository's key path. Give each agent its own key, authorized for the same user on the SFTP server.</p>{{end}}
           <button class="plain" type="submit">Test and assign</button>
         </form>
+        {{if .Jobs}}<form method="post" action="/repositories/{{.ID}}/maint-schedule">
+          <h3>When maintenance runs</h3>
+          <p class="hint">Maintenance is compaction and cleanup. It holds its agent like a backup, so jobs on that agent queue behind it.</p>
+          <label><input type="radio" name="mode" value="after" {{if ne .MaintSched.Mode "at"}}checked{{end}}> After the repository's jobs have finished (default). Waits until each scheduled job has run since the last cycle, at least 20 hours apart; a job that failed counts as having run.</label>
+          <label><input type="radio" name="mode" value="at" {{if eq .MaintSched.Mode "at"}}checked{{end}}> At a fixed time, whatever the jobs do (to run it before them, pick a time ahead of the first job). Cron, in the server's time zone: <input class="mono" name="cron" value="{{.MaintSched.Cron}}" placeholder="0 1 * * *"></label>
+          <button class="plain" type="submit">Save</button>
+        </form>{{end}}
         <form method="post" action="/repositories/{{.ID}}/maintainer">
           <h3>Maintainer</h3>
           <p class="hint">Who runs maintenance (compaction and cleanup). The default is the agent that owns the repository; the server can take over, which keeps working when agents are replaced. It must be able to open the repository itself, with nothing running on it.</p>
