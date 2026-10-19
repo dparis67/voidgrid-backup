@@ -36,7 +36,7 @@
         <label class="check wide"><input type="checkbox" name="notifarr_enabled" {{if .Form.Get "notifarr_enabled"}}checked{{end}}> Enabled</label>
         <label>API key {{if .Cfg.Notifarr}}<span class="muted">(configured; leave blank to keep it)</span>{{end}}
           <input name="notifarr_api_key" type="password" autocomplete="off"></label>
-        <label>Discord channel ID <input name="notifarr_channel_id" value="{{.Form.Get "notifarr_channel_id"}}" placeholder="123456789012345678"></label>
+        <label>Discord channel ID <span class="muted">(Discord, Developer Mode, right-click the channel, Copy Channel ID; not the example number on Notifarr&rsquo;s page)</span> <input name="notifarr_channel_id" value="{{.Form.Get "notifarr_channel_id"}}" placeholder="123456789012345678"></label>
         <label>Embed color (hex, optional) <input name="notifarr_color" value="{{.Form.Get "notifarr_color"}}" placeholder="b3261e"></label>
       </fieldset>
 

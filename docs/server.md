@@ -799,6 +799,47 @@ does a success.
 | [Notifarr](https://notifiarr.com/) | An API key and the numeric Discord channel ID to deliver to, from Notifarr's Passthrough integration. Goes through Notifarr rather than posting to Discord directly, so it shows up alongside whatever else you already route through it. |
 | Email | An SMTP server: host, port, optional username/password, a from address and at least one recipient. Port 465 is implicit TLS; anything else tries STARTTLS if the server offers it. |
 
+#### Setting up Discord
+
+1. In Discord, open the channel's settings (the gear next to its name), then
+   **Integrations**, **Webhooks**, **New Webhook**.
+2. Pick the channel, name the webhook, and choose **Copy Webhook URL**.
+3. In the server's **Notifications** page, tick **Enabled** under Discord, paste
+   the URL into **Webhook URL**, and save.
+4. Press **Send test notification**. The message should appear in the channel.
+
+The URL contains a secret token: anyone with it can post to the channel. The
+page never shows it again; leave the field blank when saving to keep it.
+
+#### Setting up Notifarr
+
+Notifarr posts to Discord through its own bot, so two things are needed on
+Discord's side as well as in Notifarr.
+
+1. In Notifarr, open the **Passthrough** integration and copy its API key.
+2. In Discord, turn on Developer Mode (User Settings, Advanced), right-click the
+   channel the alerts should go to, and choose **Copy Channel ID**. It is a
+   number of about 18 digits. The `1234567890` in Notifarr's own examples is a
+   placeholder: using it makes Notifarr accept the message and then fail to
+   deliver it (Notifarr lists the service with a last status of `404` and a send
+   count of 0).
+3. Make sure Notifarr's bot is in that Discord server and can view the channel,
+   send messages and embed links there (a private channel needs the bot added).
+4. In the server's **Notifications** page, tick **Enabled** under Notifarr, paste
+   the API key and the channel ID, optionally set the embed colour as six hex
+   digits, and save.
+5. Press **Send test notification**. The result says what Notifarr answered. The
+   first message creates a service named `voidgrid-backup` in Notifarr's
+   Passthrough page; its send count goes above 0 once a message is delivered.
+
+#### Setting up email
+
+Give the server an SMTP host and port, a from address and at least one
+recipient. Use port 465 with **Implicit TLS** ticked, or 587 (or 25) with it
+unticked, in which case the connection starts in plain text and upgrades with
+STARTTLS if the server offers it. Add a username and password if the server
+needs them. Press **Send test notification** to check it.
+
 All three can be on at once. A secret field (webhook URL, API key, SMTP
 password) left blank when saving keeps whatever was already stored for that
 channel. To turn a channel off, uncheck "enabled" and save: its settings and
