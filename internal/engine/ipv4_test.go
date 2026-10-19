@@ -5,12 +5,15 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"net"
+	"net/http"
 	"net/netip"
 	"strings"
 	"testing"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/voidgrid/voidgrid-backup/internal/tidy"
 )
 
 func testKey(t *testing.T) ssh.PublicKey {
@@ -24,6 +27,27 @@ func testKey(t *testing.T) ssh.PublicKey {
 		t.Fatal(err)
 	}
 	return k
+}
+
+func TestIPv4OnlyMakesHTTPDialIPv4(t *testing.T) {
+	l6, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skip("no IPv6 loopback here:", err)
+	}
+	defer tidy.CloseWarn("listener", l6)
+	tr := http.DefaultTransport.(*http.Transport)
+	SetIPv4Only(true)
+	t.Cleanup(func() { SetIPv4Only(false) })
+	if c, err := tr.DialContext(context.Background(), "tcp", l6.Addr().String()); err == nil {
+		tidy.CloseWarn("conn", c)
+		t.Fatal("dialled an IPv6 address with IPv4 only on")
+	}
+	SetIPv4Only(false)
+	c, err := tr.DialContext(context.Background(), "tcp", l6.Addr().String())
+	if err != nil {
+		t.Fatalf("with the switch off IPv6 must work: %v", err)
+	}
+	tidy.CloseWarn("conn", c)
 }
 
 func TestSFTPEndpointIsUntouchedUnlessIPv4OnlyIsOn(t *testing.T) {

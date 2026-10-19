@@ -42,7 +42,7 @@ command line wins over the environment.
 | `-oidc-allowed-emails` | `VB_OIDC_ALLOWED_EMAILS` | (empty) | Comma-separated allowlist. Empty allows any identity the provider authenticates |
 | | `TZ` | `UTC` | Time zone for schedules and displayed times |
 | `-cache-dir` | `VB_CACHE_DIR` | | Base directory for Kopia's local cache of the repositories the server maintains itself, one subdirectory per repository. Empty keeps it under `-data`. |
-| `-ipv4-only` | `VB_IPV4_ONLY` | `false` | Connect to SFTP storage over IPv4 only, for the repositories the server opens itself. Off by default. See the agent page for when to use it. |
+| `-ipv4-only` | `VB_IPV4_ONLY` | `false` | Connect to SFTP and S3 storage over IPv4 only (also notification webhooks and OIDC discovery; not SMTP). Off by default. See the agent page for when to use it. |
 | `-cache-metadata-mb` | `VB_CACHE_METADATA_MB` | `256` | Size limit in MiB, per repository, of the metadata cache |
 | `-cache-content-mb` | `VB_CACHE_CONTENT_MB` | `64` | Size limit in MiB, per repository, of the file-data cache. `0` turns the whole cache off. |
 

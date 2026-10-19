@@ -4,23 +4,56 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-// ipv4Only makes SFTP connections use IPv4 only. It is off unless the operator
+// ipv4Only makes SFTP and HTTP (S3) connections use IPv4 only. It is off unless the operator
 // turns it on (VB_IPV4_ONLY): a host without IPv6 whose resolver sometimes
 // answers with only an AAAA record fails with "network is unreachable" instead
 // of using IPv4.
 var ipv4Only atomic.Bool
 
-// SetIPv4Only turns the IPv4-only SFTP switch on or off for this process.
-func SetIPv4Only(on bool) { ipv4Only.Store(on) }
+// defaultDial is what http.DefaultTransport dialled with before the switch.
+var defaultDial = defaultTransportDial()
+
+func defaultTransportDial() func(context.Context, string, string) (net.Conn, error) {
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		return t.DialContext
+	}
+	return nil
+}
+
+// SetIPv4Only turns the IPv4-only switch on or off for this process. It covers
+// SFTP, as below, and everything that dials through http.DefaultTransport:
+// Kopia's S3 storage clones that transport when it opens a repository, so the
+// bucket's URL is looked up for IPv4 only, and so are notification webhooks and
+// OIDC discovery. Call it at startup, before anything is connecting.
+func SetIPv4Only(on bool) {
+	ipv4Only.Store(on)
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return
+	}
+	if !on {
+		t.DialContext = defaultDial
+		return
+	}
+	d := net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if network == "tcp" {
+			network = "tcp4"
+		}
+		return d.DialContext(ctx, network, addr)
+	}
+}
 
 // tcpNetwork is the network our own SFTP dials ask for.
 func tcpNetwork() string {

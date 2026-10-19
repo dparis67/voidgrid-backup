@@ -34,7 +34,7 @@ command line wins over the environment.
 | `-libvirt-socket` | `VB_LIBVIRT_SOCKET` | `/var/run/libvirt/libvirt-sock` | libvirt socket; empty disables VM backups |
 | `-libvirt-uri` | `VB_LIBVIRT_URI` | `qemu:///system` | libvirt connection URI |
 | `-cache-dir` | `VB_CACHE_DIR` | | Base directory for Kopia's local cache, one subdirectory per repository. Empty keeps it under `-data`. See [Kopia's local cache](#kopias-local-cache). |
-| `-ipv4-only` | `VB_IPV4_ONLY` | `false` | Connect to SFTP storage over IPv4 only. Off by default, so IPv6 works. Turn it on for a host with no IPv6 whose resolver sometimes answers with only an IPv6 address, which fails with `network is unreachable`. |
+| `-ipv4-only` | `VB_IPV4_ONLY` | `false` | Connect to SFTP and S3 storage over IPv4 only (also notification webhooks and OIDC, which use Go's default HTTP transport; not SMTP). Off by default, so IPv6 works. Turn it on for a host with no IPv6 whose resolver sometimes answers with only an IPv6 address, which fails with `network is unreachable`. |
 | `-cache-metadata-mb` | `VB_CACHE_METADATA_MB` | `256` | Size limit, in MiB per repository, of the cache an incremental backup needs |
 | `-cache-content-mb` | `VB_CACHE_CONTENT_MB` | `64` | Size limit, in MiB per repository, of the cache of file data read back for restores and checks. `0` turns the whole cache off. |
 
