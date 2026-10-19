@@ -103,7 +103,7 @@ func (u *ui) setMaintainer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	back := "/repositories"
 	if r.FormValue("from") == "agents" {
-		back = "/" // the form on a refused agent delete
+		back = "/agents" // the form on a refused agent delete
 	}
 	rp, err := u.c.Catalog.Repository(r.Context(), id)
 	if err != nil {

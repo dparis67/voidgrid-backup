@@ -66,7 +66,7 @@ func TestApproveFormPreselectsTheAgentWithTheSameHostname(t *testing.T) {
 	srv := httptest.NewServer(NewHandler(c))
 	defer srv.Close()
 	client := authedClient(t, c, srv)
-	page := get(t, client, srv.URL+"/", "Waiting for approval")
+	page := get(t, client, srv.URL+"/agents", "Waiting for approval")
 
 	same := regexp.MustCompile(`(?s)registrations/reg-same/approve.*?</form>`).FindString(page)
 	other := regexp.MustCompile(`(?s)registrations/reg-other/approve.*?</form>`).FindString(page)

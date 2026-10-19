@@ -69,7 +69,8 @@ func NewHandler(c *Controller) http.Handler {
 			slog.Debug("healthz reply not delivered", "err", err) // the client went away
 		}
 	})
-	mux.HandleFunc("GET /{$}", u.agents)
+	mux.HandleFunc("GET /{$}", u.status)
+	mux.HandleFunc("GET /agents", u.agents)
 	mux.HandleFunc("POST /agents/registrations/{id}/approve", u.approveRegistration)
 	mux.HandleFunc("POST /agents/registrations/{id}/reject", u.rejectRegistration)
 	mux.HandleFunc("POST /agents/registrations/{id}/forget", u.forgetRegistration)
@@ -293,7 +294,7 @@ func (u *ui) deleteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.FormValue("confirm") != ag.Name {
-		redirectNotice(w, r, "/", "Type the agent name to confirm deletion.")
+		redirectNotice(w, r, "/agents", "Type the agent name to confirm deletion.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
@@ -313,7 +314,7 @@ func (u *ui) deleteAgent(w http.ResponseWriter, r *http.Request) {
 	if len(warnings) > 0 {
 		msg += " Warning: " + strings.Join(warnings, "; ") + "."
 	}
-	redirectNotice(w, r, "/", msg)
+	redirectNotice(w, r, "/agents", msg)
 }
 
 func (u *ui) approveRegistration(w http.ResponseWriter, r *http.Request) {
@@ -324,7 +325,7 @@ func (u *ui) approveRegistration(w http.ResponseWriter, r *http.Request) {
 		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Approved "+ag.Name+". The agent collects its certificate within a few seconds.")
+	redirectNotice(w, r, "/agents", "Approved "+ag.Name+". The agent collects its certificate within a few seconds.")
 }
 
 func (u *ui) rejectRegistration(w http.ResponseWriter, r *http.Request) {
@@ -332,7 +333,7 @@ func (u *ui) rejectRegistration(w http.ResponseWriter, r *http.Request) {
 		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Rejected.")
+	redirectNotice(w, r, "/agents", "Rejected.")
 }
 
 func (u *ui) forgetRegistration(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +341,7 @@ func (u *ui) forgetRegistration(w http.ResponseWriter, r *http.Request) {
 		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Forgotten. The agent can register again.")
+	redirectNotice(w, r, "/agents", "Forgotten. The agent can register again.")
 }
 
 func (u *ui) rotateToken(w http.ResponseWriter, r *http.Request) {
@@ -348,7 +349,7 @@ func (u *ui) rotateToken(w http.ResponseWriter, r *http.Request) {
 		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Token rotated. Update VB_TOKEN on agents that have not registered yet.")
+	redirectNotice(w, r, "/agents", "Token rotated. Update VB_TOKEN on agents that have not registered yet.")
 }
 
 func (u *ui) renameAgent(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +357,7 @@ func (u *ui) renameAgent(w http.ResponseWriter, r *http.Request) {
 		u.agentsFailed(w, r, err)
 		return
 	}
-	redirectNotice(w, r, "/", "Renamed.")
+	redirectNotice(w, r, "/agents", "Renamed.")
 }
 
 // Repositories

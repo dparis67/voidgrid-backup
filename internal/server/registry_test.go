@@ -384,7 +384,7 @@ func TestAgentsPageApproval(t *testing.T) {
 	defer srv.Close()
 	client := authedClient(t, c, srv)
 
-	page := get(t, client, srv.URL+"/", "Waiting for approval")
+	page := get(t, client, srv.URL+"/agents", "Waiting for approval")
 	for _, want := range []string{token, "Approve", "127.0.0.1:9443", "v-test"} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("Agents page is missing %q:\n%s", want, page)
@@ -401,7 +401,7 @@ func TestAgentsPageApproval(t *testing.T) {
 	if err != nil || ag.ID != list[0].ID {
 		t.Fatalf("approving through the page: %+v %v", ag, err)
 	}
-	get(t, client, srv.URL+"/", "web box")
+	get(t, client, srv.URL+"/agents", "web box")
 
 	post(t, client, srv.URL+"/agents/"+ag.ID+"/rename", url.Values{"name": {"renamed box"}})
 	if got, _ := c.Catalog.Agent(ctx, ag.ID); got.Name != "renamed box" {
@@ -412,7 +412,7 @@ func TestAgentsPageApproval(t *testing.T) {
 	if next, _ := c.RegistrationToken(ctx); next == token {
 		t.Fatal("rotate through the page kept the token")
 	}
-	if strings.Contains(get(t, client, srv.URL+"/", "Registration token"), token) {
+	if strings.Contains(get(t, client, srv.URL+"/agents", "Registration token"), token) {
 		t.Fatal("the old token is still shown after rotating")
 	}
 }

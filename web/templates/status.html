@@ -1,0 +1,15 @@
+{{define "status"}}{{template "top" .}}
+  <div id="status">
+    <h2>Status <span class="{{.Level}}">{{.Summary}}</span></h2>
+    <div class="card status">
+      <table>
+        <tbody>
+        {{range .Lines}}
+          <tr><td class="muted">{{.Label}}</td><td><a class="{{.Level}}" href="{{.Href}}">{{.Text}}</a></td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div id="live" data-ids="status" data-every="20000" hidden></div>
+{{template "bottom" .}}{{end}}

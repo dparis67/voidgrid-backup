@@ -96,7 +96,7 @@ func TestDeleteAgentThatMaintainsARepository(t *testing.T) {
 	// Hand maintenance to the other agent from that form, then delete.
 	code, loc, _ := postStatus(t, client, srv.URL+"/repositories/"+repo.ID+"/maintainer",
 		url.Values{"from": {"agents"}, "confirm": {repo.Name}, "who": {"agent"}, "agent": {agB.ID}})
-	if code != http.StatusSeeOther || !strings.HasPrefix(loc, "/?notice=") {
+	if code != http.StatusSeeOther || !strings.HasPrefix(loc, "/agents?notice=") {
 		t.Fatalf("hand-over: %d %q", code, loc)
 	}
 	code, _, body = postStatus(t, client, srv.URL+"/agents/"+job.AgentID+"/delete", url.Values{"confirm": {"box"}})

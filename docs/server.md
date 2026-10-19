@@ -223,6 +223,19 @@ than OIDC being temporarily unavailable.
 
 ## Using the UI
 
+### Status
+
+The home page (`/`) is the one place to see whether everything is fine, in four
+short lines, each a link to the page behind it: **Agents** (how many are
+reachable, which are not, how many are waiting for approval), **Jobs** (the
+result of each job's last backup, with the names of failed and partial ones and
+how many are running now), **Repositories** (whether maintenance last
+succeeded, and any that are not set up) and **Next backup** (the soonest
+scheduled start). A line turns amber or red when something needs attention, and
+the heading says how many do. The page only reads the server's own records, so
+it never waits on an agent or a repository, and it refreshes itself every 20
+seconds. The agent list is at `/agents`.
+
 ### Agents
 
 Agents register themselves (see [agent.md](agent.md#registration)) and wait

@@ -133,6 +133,10 @@
   details.job-delete > summary { list-style: none; cursor: pointer; padding: 7px 16px; color: var(--bad); border: 1px solid var(--line); border-radius: var(--radius); }
   details.job-delete > summary::-webkit-details-marker { display: none; }
   details.job-delete[open] > summary { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+  .status td { padding: 10px 14px; }
+  .status td.muted { width: 11em; white-space: nowrap; }
+  .status a.ok { color: var(--ok); } .status a.warn { color: var(--warn); }
+  .status a.bad { color: var(--bad); } .status a.muted { color: var(--muted); }
   .repo-edit { margin-left: auto; }
   .repo-loc { padding: 10px 14px 0; overflow-wrap: anywhere; }
   dl.repo-facts { grid-template-columns: repeat(auto-fit, minmax(13em, 1fr)); gap: 14px 20px; }
@@ -157,7 +161,8 @@
 <header>
   <h1>voidgrid-backup</h1>
   <nav>
-    <a href="/" {{if eq .Nav "agents"}}class="on"{{end}}>Agents</a>
+    <a href="/" {{if eq .Nav "home"}}class="on"{{end}}>Status</a>
+    <a href="/agents" {{if eq .Nav "agents"}}class="on"{{end}}>Agents</a>
     <a href="/repositories" {{if eq .Nav "repos"}}class="on"{{end}}>Repositories</a>
     <a href="/jobs" {{if eq .Nav "jobs"}}class="on"{{end}}>Jobs</a>
     <a href="/schedule" {{if eq .Nav "schedule"}}class="on"{{end}}>Schedule</a>
