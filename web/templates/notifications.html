@@ -11,7 +11,7 @@
       <thead><tr><th>Channel</th><th>Result</th></tr></thead>
       <tbody>
       {{range .TestResults}}
-        <tr><td>{{.Channel}}</td><td>{{if .Err}}<span class="bad">{{.Err}}</span>{{else}}<span class="ok">sent</span>{{end}}</td></tr>
+        <tr><td>{{.Channel}}</td><td>{{if .Err}}<span class="bad">{{.Err}}</span>{{else}}<span class="ok">sent</span>{{with .Detail}} <span class="muted">The service answered: {{.}}</span>{{end}}{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>

@@ -234,3 +234,31 @@ func TestSendEmailAuth(t *testing.T) {
 		t.Fatalf("AUTH PLAIN payload: %q", s)
 	}
 }
+
+// What a service answers is kept, and a failure never carries the URL, which
+// holds the API key or the webhook's token.
+func TestPostJSONKeepsTheAnswerAndHidesTheURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ok") {
+			_, _ = w.Write([]byte(`{"result":"success"}`))
+			return
+		}
+		http.Error(w, "no such key", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	d, err := postJSON(context.Background(), srv.URL+"/secret-token/ok", map[string]any{})
+	if err != nil || d != `{"result":"success"}` {
+		t.Fatalf("ok: %q %v", d, err)
+	}
+	_, err = postJSON(context.Background(), srv.URL+"/secret-token/bad", map[string]any{})
+	if err == nil || !strings.Contains(err.Error(), "no such key") || strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("http error: %v", err)
+	}
+	url := srv.URL + "/secret-token/ok"
+	srv.Close()
+	_, err = postJSON(context.Background(), url, map[string]any{})
+	if err == nil || strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("a connection error must not carry the URL: %v", err)
+	}
+}

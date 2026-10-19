@@ -11,10 +11,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/smtp"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -91,11 +94,15 @@ type Event struct {
 type Result struct {
 	Channel string
 	Err     error
+	Detail  string // what the service answered, if it said anything
 }
 
 func (r Result) String() string {
 	if r.Err != nil {
 		return r.Channel + ": " + r.Err.Error()
+	}
+	if r.Detail != "" {
+		return r.Channel + ": ok (the service answered: " + r.Detail + ")"
 	}
 	return r.Channel + ": ok"
 }
@@ -112,13 +119,15 @@ var notifarrURL = defaultNotifarrURL
 func Send(ctx context.Context, cfg Config, ev Event) []Result {
 	var out []Result
 	if cfg.Notifarr.enabled() {
-		out = append(out, Result{"Notifarr", sendNotifarr(ctx, cfg, ev)})
+		d, err := sendNotifarr(ctx, cfg, ev)
+		out = append(out, Result{Channel: "Notifarr", Err: err, Detail: d})
 	}
 	if cfg.Discord.enabled() {
-		out = append(out, Result{"Discord", sendDiscord(ctx, cfg, ev)})
+		d, err := sendDiscord(ctx, cfg, ev)
+		out = append(out, Result{Channel: "Discord", Err: err, Detail: d})
 	}
 	if cfg.Email.enabled() {
-		out = append(out, Result{"Email", sendEmail(cfg.Email, cfg, ev)})
+		out = append(out, Result{Channel: "Email", Err: sendEmail(cfg.Email, cfg, ev)})
 	}
 	return out
 }
@@ -147,31 +156,47 @@ func (ev Event) body(cfg Config) string {
 	return b.String()
 }
 
-func postJSON(ctx context.Context, url string, body any) error {
+// postJSON posts body and returns what the service answered (at most
+// maxReply bytes of it), which is the only evidence of what it did with the
+// message. The URL is never put in an error: for Notifarr it holds the API key
+// and for Discord the webhook's token.
+func postJSON(ctx context.Context, url string, body any) (string, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
-		return err
+		return "", errors.Unwrap(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/plain")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // the same error without the URL
+		}
+		return "", err
 	}
 	defer tidy.Close(resp.Body)
+	reply, _ := io.ReadAll(io.LimitReader(resp.Body, maxReply)) // a short read only shortens the evidence
+	detail := strings.TrimSpace(string(reply))
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("%s: %s", url, resp.Status)
+		if detail != "" {
+			return detail, fmt.Errorf("%s: %s", resp.Status, detail)
+		}
+		return "", errors.New(resp.Status)
 	}
-	return nil
+	return detail, nil
 }
+
+// maxReply bounds how much of a service's answer is kept.
+const maxReply = 512
 
 // sendNotifarr posts to Notifarr's passthrough endpoint. Schema per
 // https://notifiarr.wiki/pages/integrations/passthrough/.
-func sendNotifarr(ctx context.Context, cfg Config, ev Event) error {
+func sendNotifarr(ctx context.Context, cfg Config, ev Event) (string, error) {
 	n := cfg.Notifarr
 	payload := map[string]any{
 		"notification": map[string]any{
@@ -191,7 +216,7 @@ func sendNotifarr(ctx context.Context, cfg Config, ev Event) error {
 }
 
 // sendDiscord posts a plain Discord webhook message, no Notifarr involved.
-func sendDiscord(ctx context.Context, cfg Config, ev Event) error {
+func sendDiscord(ctx context.Context, cfg Config, ev Event) (string, error) {
 	const (
 		colorRed    = 0xb3261e // failed
 		colorYellow = 0xe0c050 // partial

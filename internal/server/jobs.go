@@ -405,7 +405,7 @@ func (c *Controller) notifyOnFailure(ctx context.Context, jobName string, run ca
 		if r.Err != nil {
 			slog.Error("notify", "job", jobName, "channel", r.Channel, "err", r.Err)
 		} else {
-			slog.Info("notify", "job", jobName, "channel", r.Channel)
+			slog.Info("notify", "job", jobName, "channel", r.Channel, "answer", r.Detail)
 		}
 	}
 }
