@@ -801,8 +801,9 @@ does a success.
 
 All three can be on at once. A secret field (webhook URL, API key, SMTP
 password) left blank when saving keeps whatever was already stored for that
-channel — the way to turn a channel off is to uncheck "enabled," not to
-blank its secret. "Send test notification" fires one test message to every
+channel. To turn a channel off, uncheck "enabled" and save: its settings and
+secret are kept, so it can be switched back on later without retyping them, and
+it is not sent to or tested while off (handy to test one channel at a time). "Send test notification" fires one test message to every
 currently-enabled channel and reports each result, without needing a real
 failure to test with.
 

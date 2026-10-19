@@ -105,65 +105,117 @@ func (u *ui) saveNotifications(w http.ResponseWriter, r *http.Request) {
 // blank secret field (webhook URL, API key, SMTP password) keeps whatever
 // was already saved for that channel, so re-saving other fields never
 // requires retyping it; the way to actually change one is to type a new
-// value, and the way to turn a channel off is to uncheck it, not blank its
-// secret.
+// value.
+//
+// Unchecking "enabled" turns a channel off without forgetting it: its settings
+// and secrets are kept (from the form when they are complete, else as already
+// saved) and only Enabled is cleared, so it can be switched back on, or left
+// off while another channel is tested. Only an enabled channel must be valid.
 func notifyConfigFromForm(f url.Values, existing notify.Config) (notify.Config, error) {
 	cfg := notify.Config{URL: strings.TrimSpace(f.Get("url"))}
 
-	if f.Get("discord_enabled") != "" {
-		webhook := strings.TrimSpace(f.Get("discord_webhook_url"))
-		if webhook == "" && existing.Discord != nil {
-			webhook = existing.Discord.WebhookURL
-		}
-		if webhook == "" {
-			return cfg, errors.New("discord: webhook URL is required")
-		}
-		cfg.Discord = &notify.DiscordConfig{Enabled: true, WebhookURL: webhook}
-	}
-
-	if f.Get("notifarr_enabled") != "" {
-		apiKey := strings.TrimSpace(f.Get("notifarr_api_key"))
-		if apiKey == "" && existing.Notifarr != nil {
-			apiKey = existing.Notifarr.APIKey
-		}
-		if apiKey == "" {
-			return cfg, errors.New("notifarr: API key is required")
-		}
-		channelID, err := strconv.ParseInt(strings.TrimSpace(f.Get("notifarr_channel_id")), 10, 64)
-		if err != nil || channelID == 0 {
-			return cfg, errors.New("notifarr: a numeric Discord channel ID is required")
-		}
-		cfg.Notifarr = &notify.NotifarrConfig{
-			Enabled: true, APIKey: apiKey, ChannelID: channelID,
-			Color: strings.TrimPrefix(strings.TrimSpace(f.Get("notifarr_color")), "#"),
-		}
-	}
-
-	if f.Get("email_enabled") != "" {
-		port, err := strconv.Atoi(strings.TrimSpace(f.Get("email_port")))
+	d, err := discordFromForm(f, existing.Discord)
+	switch {
+	case f.Get("discord_enabled") != "":
 		if err != nil {
-			return cfg, errors.New("email: port must be a number")
+			return cfg, err
 		}
-		password := f.Get("email_password")
-		if password == "" && existing.Email != nil {
-			password = existing.Email.Password
+		cfg.Discord = d
+	case err == nil:
+		d.Enabled = false
+		cfg.Discord = d
+	case existing.Discord != nil:
+		kept := *existing.Discord
+		kept.Enabled = false
+		cfg.Discord = &kept
+	}
+
+	n, err := notifarrFromForm(f, existing.Notifarr)
+	switch {
+	case f.Get("notifarr_enabled") != "":
+		if err != nil {
+			return cfg, err
 		}
-		var to []string
-		for _, addr := range strings.Split(f.Get("email_to"), ",") {
-			if addr = strings.TrimSpace(addr); addr != "" {
-				to = append(to, addr)
-			}
+		cfg.Notifarr = n
+	case err == nil:
+		n.Enabled = false
+		cfg.Notifarr = n
+	case existing.Notifarr != nil:
+		kept := *existing.Notifarr
+		kept.Enabled = false
+		cfg.Notifarr = &kept
+	}
+
+	e, err := emailFromForm(f, existing.Email)
+	switch {
+	case f.Get("email_enabled") != "":
+		if err != nil {
+			return cfg, err
 		}
-		if strings.TrimSpace(f.Get("email_host")) == "" || strings.TrimSpace(f.Get("email_from")) == "" || len(to) == 0 {
-			return cfg, errors.New("email: host, from address and at least one recipient are required")
-		}
-		cfg.Email = &notify.EmailConfig{
-			Enabled: true, Host: strings.TrimSpace(f.Get("email_host")), Port: port,
-			ImplicitTLS: f.Get("email_implicit_tls") != "", Username: strings.TrimSpace(f.Get("email_username")),
-			Password: password, From: strings.TrimSpace(f.Get("email_from")), To: to,
-		}
+		cfg.Email = e
+	case err == nil:
+		e.Enabled = false
+		cfg.Email = e
+	case existing.Email != nil:
+		kept := *existing.Email
+		kept.Enabled = false
+		cfg.Email = &kept
 	}
 	return cfg, nil
+}
+
+func discordFromForm(f url.Values, existing *notify.DiscordConfig) (*notify.DiscordConfig, error) {
+	webhook := strings.TrimSpace(f.Get("discord_webhook_url"))
+	if webhook == "" && existing != nil {
+		webhook = existing.WebhookURL
+	}
+	if webhook == "" {
+		return nil, errors.New("discord: webhook URL is required")
+	}
+	return &notify.DiscordConfig{Enabled: true, WebhookURL: webhook}, nil
+}
+
+func notifarrFromForm(f url.Values, existing *notify.NotifarrConfig) (*notify.NotifarrConfig, error) {
+	apiKey := strings.TrimSpace(f.Get("notifarr_api_key"))
+	if apiKey == "" && existing != nil {
+		apiKey = existing.APIKey
+	}
+	if apiKey == "" {
+		return nil, errors.New("notifarr: API key is required")
+	}
+	channelID, err := strconv.ParseInt(strings.TrimSpace(f.Get("notifarr_channel_id")), 10, 64)
+	if err != nil || channelID == 0 {
+		return nil, errors.New("notifarr: a numeric Discord channel ID is required")
+	}
+	return &notify.NotifarrConfig{
+		Enabled: true, APIKey: apiKey, ChannelID: channelID,
+		Color: strings.TrimPrefix(strings.TrimSpace(f.Get("notifarr_color")), "#"),
+	}, nil
+}
+
+func emailFromForm(f url.Values, existing *notify.EmailConfig) (*notify.EmailConfig, error) {
+	port, err := strconv.Atoi(strings.TrimSpace(f.Get("email_port")))
+	if err != nil {
+		return nil, errors.New("email: port must be a number")
+	}
+	password := f.Get("email_password")
+	if password == "" && existing != nil {
+		password = existing.Password
+	}
+	var to []string
+	for _, addr := range strings.Split(f.Get("email_to"), ",") {
+		if addr = strings.TrimSpace(addr); addr != "" {
+			to = append(to, addr)
+		}
+	}
+	if strings.TrimSpace(f.Get("email_host")) == "" || strings.TrimSpace(f.Get("email_from")) == "" || len(to) == 0 {
+		return nil, errors.New("email: host, from address and at least one recipient are required")
+	}
+	return &notify.EmailConfig{
+		Enabled: true, Host: strings.TrimSpace(f.Get("email_host")), Port: port,
+		ImplicitTLS: f.Get("email_implicit_tls") != "", Username: strings.TrimSpace(f.Get("email_username")),
+		Password: password, From: strings.TrimSpace(f.Get("email_from")), To: to,
+	}, nil
 }
 
 func (u *ui) testNotifications(w http.ResponseWriter, r *http.Request) {
