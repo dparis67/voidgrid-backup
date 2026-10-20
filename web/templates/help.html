@@ -1,0 +1,22 @@
+{{define "help-top"}}{{template "top" .}}
+  <p class="doc-nav">
+    <a href="/help">Help</a>{{range .Pages}} · {{if eq .Name $.Doc.Name}}<strong>{{.Label}}</strong>{{else}}<a href="/help/{{.Name}}">{{.Label}}</a>{{end}}{{end}}
+  </p>
+  <article class="doc">
+{{end}}
+
+{{define "help-bottom"}}
+  </article>
+{{template "bottom" .}}{{end}}
+
+{{define "help"}}{{template "top" .}}
+  <h2>Help</h2>
+  <p class="hint">The documentation for this version ({{.Version}}), built into the server, so it matches what is running and needs no internet. The newest docs are on <a href="https://github.com/voidgrid/voidgrid-backup/tree/main/docs">GitHub</a>.</p>
+  <div class="card">
+    <table>
+      <tbody>
+      {{range .Pages}}<tr><td><a href="/help/{{.Name}}">{{.Label}}</a></td><td class="muted">{{.About}}</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+{{template "bottom" .}}{{end}}

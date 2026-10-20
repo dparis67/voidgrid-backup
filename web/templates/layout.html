@@ -77,6 +77,16 @@
   tr:last-child td { border-bottom: 0; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .mono { font-family: var(--font); font-size: 13px; }
+  .doc { max-width: 880px; }
+  .doc h1 { font-size: 20px; margin: 0 0 12px; }
+  .doc h2 { font-size: 16px; margin: 32px 0 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .doc h3 { font-size: 14px; margin: 24px 0 8px; } .doc h4, .doc h5 { font-size: 13px; margin: 18px 0 6px; }
+  .doc code { font-family: var(--font); font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .doc pre { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; overflow-x: auto; }
+  .doc pre code { background: none; border: 0; padding: 0; }
+  .doc table { display: block; overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: var(--radius); }
+  .doc blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--line); color: var(--muted); }
+  .doc-nav { color: var(--muted); }
   .ok, .success { color: var(--ok); } .bad, .failed { color: var(--bad); } .warn, .partial, .running { color: var(--warn); }
   .muted { color: var(--muted); }
   details.fold { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; }
@@ -169,6 +179,7 @@
     <a href="/logs" {{if eq .Nav "logs"}}class="on"{{end}}>Logs</a>
     <a href="/notifications" {{if eq .Nav "notifications"}}class="on"{{end}}>Notifications</a>
     <a href="/authentication" {{if eq .Nav "authentication"}}class="on"{{end}}>Authentication</a>
+    <a href="/help" {{if eq .Nav "help"}}class="on"{{end}}>Help</a>
   </nav>
   {{if .User}}<span class="row" style="margin-left:auto">
     <span class="muted">{{.User}}</span>

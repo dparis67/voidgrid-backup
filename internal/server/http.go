@@ -98,6 +98,8 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /notifications", u.saveNotifications)
 	mux.HandleFunc("POST /notifications/test", u.testNotifications)
 	mux.HandleFunc("GET /logs", u.logs)
+	mux.HandleFunc("GET /help", u.helpIndex)
+	mux.HandleFunc("GET /help/{name}", u.helpDoc)
 	mux.HandleFunc("GET /jobs", u.jobs)
 	mux.HandleFunc("GET /jobs/convert-utc", u.convertForm)
 	mux.HandleFunc("POST /jobs/convert-utc", u.convertApply)

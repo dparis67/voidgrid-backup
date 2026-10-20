@@ -10,6 +10,11 @@ dependency; this file exists to retain its copyright notice, as the license
 asks of anyone distributing software that includes it (the built Docker
 image does, since Kopia's code is compiled into both binaries).
 
+The Help pages render the embedded documentation with
+[goldmark](https://github.com/yuin/goldmark) (`github.com/yuin/goldmark`), which
+is MIT-licensed: <https://github.com/yuin/goldmark/blob/master/LICENSE>
+(Copyright (c) 2019 Yusuke Inuzuka).
+
 Every other dependency is listed with its version in `go.mod`; run `go
 list -m all` (inside `scripts/go.sh`) for the full tree, or a tool like
 [`go-licenses`](https://github.com/google/go-licenses) to check them all at

@@ -875,6 +875,13 @@ it is not sent to or tested while off (handy to test one channel at a time). "Se
 currently-enabled channel and reports each result, without needing a real
 failure to test with.
 
+### Help
+
+The **Help** link in the header opens this documentation (server, agent,
+recovery and testing) inside the UI. The pages are built into the server, so
+they always match the version that is running and need no internet access. The
+newest docs are in the repository on GitHub.
+
 ## JSON API
 
 Read-only, and behind the same login as the UI when one is configured (see
