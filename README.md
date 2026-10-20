@@ -18,7 +18,7 @@ Also I suck at writing README.md stuff...
 
 | Component | Runs | Does |
 |---|---|---|
-| `voidgrid-backup-server` | once | Web UI, JSON API, scheduler, catalog. Never touches backup data. [docs/server.md](docs/server.md) |
+| `voidgrid-backup-server` | once | Web UI, JSON API, scheduler, catalog. Does not run backups; it opens a repository itself only to maintain it, or to browse and restore when no agent can. [docs/server.md](docs/server.md) |
 | `voidgrid-backup-agent` | on every host with something to back up | Reads data, talks to Docker and libvirt, writes snapshots to the repository. [docs/agent.md](docs/agent.md) |
 | `voidgrid-backup-recover` | on demand | Break-glass restore straight from a repository: no server, catalog or agent needed. [docs/recovery.md](docs/recovery.md) |
 

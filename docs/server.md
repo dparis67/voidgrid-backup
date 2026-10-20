@@ -620,7 +620,9 @@ whose identity (`voidgrid-backup@voidgrid-server`) does not change:
   again with its password. Refused while any job uses it.
 - **Wipe a repository**: same section. Deletes every blob of the repository from
   storage through the agent you pick, then removes it from the server. Needs no
-  repository password, cannot be undone, and frees the space at once. It refuses
+  repository password, cannot be undone, and frees the space at once. It
+  deletes 8 blobs at a time, the repository's format blob last, so a wipe that
+  stops halfway can be run again. It refuses
   when no repository is found at the location, and while any job uses it or the
   repository is busy. Empty directories remain on SFTP and filesystem storage.
   If it fails, the error stays on the row and it can be run again.
@@ -672,6 +674,15 @@ history as kind `check`.
 | partial | It finished, but something needs attention: unreadable files (named), a failed database dump, a crash-consistent VM copy, or **ACTION NEEDED** for a VM disk left on an overlay |
 | failed | Nothing usable was produced |
 | running | In progress. Runs still "running" when the server restarts are marked failed on start. |
+
+A finished backup's summary gives the paths done, the changed files, the size of
+the source, how much of it was **added to the repository** (new data after
+deduplication and compression, from Kopia's upload counter; left out for an
+agent that predates the figure) and the old snapshots pruned. A run that
+failed with "the agent stopped or lost its connection during the run" means the
+agent's connection dropped while it worked: the agent restarted, was stopped or
+lost the network. A network failure while opening a repository is retried for
+up to 15 minutes first (see [agent.md](agent.md)).
 
 ### Browsing and restoring
 
@@ -891,3 +902,6 @@ know newer RPCs, which shows up as an error on the run.
 | An agent never appears under "Waiting for approval" | Its `VB_SERVER` reaches the registration port, and its `VB_TOKEN` is the current one (rotating changes it) |
 | Schedules run at the wrong hour | `TZ` in the server's `.env` |
 | A run is "partial" | The run's detail lines say exactly what and where |
+| "the agent stopped or lost its connection during the run" | The agent restarted or lost the network while it worked: its log around that time, and whether its container was recreated |
+| Adding or editing a repository says it "already uses" a place | Another repository has the same SFTP host, port, user and path, S3 endpoint, bucket and prefix, or directory. Every repository needs its own |
+| Backups sit as "running" but nothing moves | They may be waiting for a free connection to the storage host: the server log says `waited for a free storage connection`; see **SFTP connection limit** under Sharing a repository between agents |

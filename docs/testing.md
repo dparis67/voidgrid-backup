@@ -20,8 +20,11 @@ directory it deletes afterwards.
   restore still matches.
 - **Not covered:** any other SFTP server (the Storage Box's behaviour on a
   directory rename is the one that was checked), password login, several agents
-  using one Storage Box at once against its connection limit, and repositories
-  large enough for listing or deleting blobs to take hours.
+  using one Storage Box at once against its connection limit (the server's
+  SFTP connection limit is tested with counters and a fake store, not against a
+  real box), the parallel wipe against a real box, server-run maintenance over
+  SFTP, and repositories large enough for listing or deleting blobs to take
+  hours.
 
 ## S3: Backblaze B2 only
 
