@@ -252,6 +252,9 @@ func (c *Controller) EditRepository(ctx context.Context, repoID string, in RepoE
 	if reflect.DeepEqual(newCfg, repo.Config) {
 		return nil, errors.New("nothing was changed")
 	}
+	if err := c.checkLocationFree(ctx, newCfg, repoID); err != nil {
+		return nil, err
+	}
 	ed, err := c.chooseEditor(ctx, repo, in.On)
 	if err != nil {
 		return nil, err

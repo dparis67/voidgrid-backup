@@ -87,8 +87,10 @@ func (c *Controller) measureOnAgent(ctx context.Context, repo catalog.Repository
 	if err != nil {
 		return RepoStats{}, err
 	}
-	resp, err := withAgent(c, agent, repoStatsTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RepoStatsResponse, error) {
-		return cl.RepoStats(ctx, &agentpb.RepoStatsRequest{Repository: toProtoRepo(repo, agent.ID)})
+	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.RepoStatsResponse, error) {
+		return withAgent(c, agent, repoStatsTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.RepoStatsResponse, error) {
+			return cl.RepoStats(ctx, &agentpb.RepoStatsRequest{Repository: toProtoRepo(repo, agent.ID)})
+		})
 	})
 	if err != nil {
 		return RepoStats{}, err

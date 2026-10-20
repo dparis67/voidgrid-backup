@@ -128,6 +128,23 @@ func (c Config) Location() string {
 	return c.Kind
 }
 
+// Identity names the storage location the config points at, normalised so two
+// configs for the same place compare equal: the host in lower case, paths
+// cleaned, an S3 prefix without its slashes. Credentials, key files and the
+// server-side path are not part of it. Two repositories must not share one.
+func (c Config) Identity() string {
+	switch {
+	case c.SFTP != nil:
+		return fmt.Sprintf("sftp|%s|%d|%s|%s", strings.ToLower(c.SFTP.Host), c.SFTP.Port, c.SFTP.User, path.Clean(c.SFTP.Path))
+	case c.S3 != nil:
+		ep := strings.TrimRight(strings.ToLower(c.S3.Endpoint), "/")
+		return "s3|" + ep + "|" + c.S3.Bucket + "|" + strings.Trim(c.S3.Prefix, "/")
+	case c.Filesystem != nil:
+		return "fs|" + path.Clean(c.Filesystem.Path)
+	}
+	return ""
+}
+
 // ForAgent is the config as the given agent sees it: without the server-only
 // path, and with the SFTP key path that applies to that agent (its entry in
 // KeyFiles, else the default). An empty agentID gives the default for all.

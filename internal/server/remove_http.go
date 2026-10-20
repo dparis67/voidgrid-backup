@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/voidgrid/voidgrid-backup/internal/catalog"
@@ -140,6 +141,16 @@ func (u *ui) setMaintSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectNotice(w, r, "/repositories", "Maintenance of "+rp.Name+" now runs "+u.c.MaintSchedule(r.Context(), id).describe()+".")
+}
+
+// setSFTPCap saves the limit on simultaneous connections to one SFTP host.
+func (u *ui) setSFTPCap(w http.ResponseWriter, r *http.Request) {
+	n, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("n")))
+	if err := u.c.SetSFTPCap(r.Context(), r.FormValue("mode"), n); err != nil {
+		redirectNotice(w, r, "/repositories", "Not changed: "+err.Error())
+		return
+	}
+	redirectNotice(w, r, "/repositories", "SFTP connection limit: "+u.c.SFTPCap(r.Context()).Describe()+".")
 }
 
 // takeOverMaintenance is the one-click fix on a repository whose maintenance

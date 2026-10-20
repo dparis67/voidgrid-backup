@@ -93,6 +93,9 @@ func (c *Controller) AddRepository(ctx context.Context, name string, cfg repocfg
 	if err := cfg.Validate(); err != nil {
 		return catalog.Repository{}, "", err
 	}
+	if err := c.checkLocationFree(ctx, cfg, ""); err != nil {
+		return catalog.Repository{}, "", err
+	}
 	if _, err := c.Catalog.RepositoryByName(ctx, name); err == nil {
 		return catalog.Repository{}, "", errors.New("a repository with that name already exists")
 	} else if !errors.Is(err, catalog.ErrNotFound) {
@@ -365,8 +368,10 @@ func (c *Controller) RunJob(ctx context.Context, jobID, trigger string) (catalog
 	}
 	slog.Info("backup started", "job", job.Name, "trigger", trigger, "agent", agent.Name)
 	stopProgress := c.pollAgentProgress(jobID, agent)
-	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.BackupResponse, error) {
-		return cl.Backup(ctx, req)
+	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.BackupResponse, error) {
+		return withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.BackupResponse, error) {
+			return cl.Backup(ctx, req)
+		})
 	})
 	stopProgress()
 	run.FinishedAt = time.Now()
@@ -484,11 +489,13 @@ func (c *Controller) RunCheck(ctx context.Context, jobID string) (catalog.Run, e
 		return catalog.Run{}, err
 	}
 	slog.Info("check started", "job", jobID, "agent", agent.Name)
-	resp, err := withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
-		return cl.Check(ctx, &agentpb.CheckRequest{
-			Repository:          toProtoRepo(repo, agent.ID),
-			VerifyPercent:       checkVerifyPercent,
-			TestRestoreMaxBytes: checkTestRestoreMaxBytes,
+	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.CheckResponse, error) {
+		return withAgent(c, agent, runTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.CheckResponse, error) {
+			return cl.Check(ctx, &agentpb.CheckRequest{
+				Repository:          toProtoRepo(repo, agent.ID),
+				VerifyPercent:       checkVerifyPercent,
+				TestRestoreMaxBytes: checkTestRestoreMaxBytes,
+			})
 		})
 	})
 	run.FinishedAt = time.Now()
@@ -541,8 +548,10 @@ func (c *Controller) listRemoteSnapshots(ctx context.Context, jobID string) (sna
 	if job.VM != nil {
 		paths = []string{"/vms/" + job.VM.Name}
 	}
-	resp, err := withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListSnapshotsResponse, error) {
-		return cl.ListSnapshots(ctx, &agentpb.ListSnapshotsRequest{Repository: toProtoRepo(repo, agent.ID), Paths: paths})
+	resp, err := withStorageSlot(ctx, c, repo, func() (*agentpb.ListSnapshotsResponse, error) {
+		return withAgent(c, agent, browseTimeout, func(ctx context.Context, cl agentpb.AgentClient) (*agentpb.ListSnapshotsResponse, error) {
+			return cl.ListSnapshots(ctx, &agentpb.ListSnapshotsRequest{Repository: toProtoRepo(repo, agent.ID), Paths: paths})
+		})
 	})
 	if err != nil {
 		if c.ServerCanOpen(repo) != nil {
@@ -724,6 +733,17 @@ func runError(err error) string {
 		return "the agent stopped or lost its connection during the run (agent restarted?): " + err.Error()
 	}
 	return err.Error()
+}
+
+// withStorageSlot runs op holding one connection to the repository's SFTP host.
+func withStorageSlot[T any](ctx context.Context, c *Controller, repo catalog.Repository, op func() (T, error)) (T, error) {
+	release, err := c.storageSlot(ctx, repo)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	defer release()
+	return op()
 }
 
 // toProtoRepo is the repository as agent agentID is sent it.

@@ -156,6 +156,11 @@ func (c *Controller) recordMaintenanceRun(ctx context.Context, m catalog.Mainten
 // runMaintenance runs a cycle on the maintenance owner. It returns the agent
 // that ran it and how long the cycle waited for agents to finish earlier work.
 func (c *Controller) runMaintenance(ctx context.Context, repo catalog.Repository) (string, time.Duration, error) {
+	release, err := c.storageSlot(ctx, repo)
+	if err != nil {
+		return "", 0, err
+	}
+	defer release()
 	if c.MaintainedBy(ctx, repo.ID) == MaintByServer {
 		id, err := c.runServerMaintenance(ctx, repo)
 		return id, 0, err

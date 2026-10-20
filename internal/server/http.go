@@ -87,6 +87,7 @@ func NewHandler(c *Controller) http.Handler {
 	mux.HandleFunc("POST /repositories/{id}/maintain", u.maintainRepository)
 	mux.HandleFunc("POST /repositories/{id}/maintainer", u.setMaintainer)
 	mux.HandleFunc("POST /repositories/{id}/maint-schedule", u.setMaintSchedule)
+	mux.HandleFunc("POST /settings/sftp-cap", u.setSFTPCap)
 	mux.HandleFunc("POST /repositories/{id}/takeover", u.takeOverMaintenance)
 	mux.HandleFunc("POST /repositories/{id}/agents", u.assignAgent)
 	mux.HandleFunc("POST /repositories/{id}/agents/{agent}/remove", u.unassignAgent)
@@ -401,6 +402,7 @@ type repositoriesPage struct {
 	Created   string
 	// ServerEngine: the server has its own engine, so it can create a repository.
 	ServerEngine bool
+	SFTPCap      SFTPCap // the limit on simultaneous connections to one SFTP host
 }
 
 func (u *ui) repositories(w http.ResponseWriter, r *http.Request) {
@@ -410,6 +412,7 @@ func (u *ui) repositories(w http.ResponseWriter, r *http.Request) {
 func (u *ui) renderRepositories(w http.ResponseWriter, r *http.Request, code int, p repositoriesPage) {
 	ctx := r.Context()
 	p.ServerEngine = u.c.Engine != nil
+	p.SFTPCap = u.c.SFTPCap(ctx)
 	repos, err := u.c.Catalog.ListRepositories(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

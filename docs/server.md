@@ -381,10 +381,26 @@ histories and retention never touch each other.
   unrelated data never shares a directory and a path is readable. The ID part
   is there because adding a repository at a path that already holds one
   connects to it, so two hosts with the same hostname must not share a default.
-  It is a default, not enforced.
-- A Storage Box limits simultaneous connections (about 10). Jobs on several
-  agents share them, so stagger their schedules (the Jobs page warns about
-  overlaps).
+  It is only a default, but a location is enforced: adding or editing a
+  repository is refused when another repository already uses the same place
+  (the same SFTP host, port, user and path, the same S3 endpoint, bucket and
+  prefix, or the same directory). Two repositories in one place would write over
+  each other's blobs. Reconnecting to existing data after a catalog loss still
+  works, since the catalog no longer lists the old repository.
+- **SFTP connection limit.** A Hetzner Storage Box allows up to 10 simultaneous
+  connections per account
+  ([Hetzner's Storage Box documentation](https://docs.hetzner.com/robot/storage-box/general)),
+  and other SFTP providers have limits of their own. Every backup, check,
+  restore, maintenance run, snapshot refresh and repository measuring holds one
+  connection to its SFTP host while it works; when the host is at its limit the
+  next one waits its turn instead of failing. Set the limit on the Repositories
+  page, **SFTP connection limit**: *Automatic* (the default: 10 on a
+  `*.your-storagebox.de` host, no limit elsewhere), *at most N* connections to
+  every SFTP host, or *Off*. Connections are counted per host and port, not per
+  user, because Hetzner counts per box. The limit covers what the server starts;
+  an agent's own scheduled or manual command line use is not counted. Jobs
+  still overlap in time on a shared box, so keep staggering their schedules
+  (the Jobs page warns about overlaps).
 - Several agents writing to one repository has only been tested between
   in-process agents on a local filesystem repository, not against a real
   Storage Box or S3.

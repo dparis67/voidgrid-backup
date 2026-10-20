@@ -35,10 +35,15 @@ func (c *Controller) ServerCanOpen(repo catalog.Repository) error {
 func runOn[T any](c *Controller, a catalog.Agent, repo catalog.Repository, timeout time.Duration,
 	local func(context.Context, engine.Repo) (T, error),
 	remote func(context.Context, agentpb.AgentClient) (T, error)) (T, error) {
+	var zero T
+	release, err := c.storageSlot(context.Background(), repo)
+	if err != nil {
+		return zero, err
+	}
+	defer release()
 	if a.ID != ServerHost {
 		return withAgent(c, a, timeout, remote)
 	}
-	var zero T
 	if c.Engine == nil {
 		return zero, errors.New("this server has no repository engine")
 	}
